@@ -3,7 +3,6 @@ package main
 
 import (
 	"context"
-	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -127,29 +126,12 @@ func dataRequest(data []byte) json.RawMessage {
 	return e.Request
 }
 func main() {
-	if filepath.Base(os.Args[0]) == "write-artifact" {
-		cwd, err := os.Getwd()
-		if err != nil {
-			log.Fatal(err)
-		}
-		destination := filepath.Join(cwd, "index.html")
-		if err := writeArtifact(os.Stdin, destination); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			os.Exit(1)
-		}
-		raw, _ := os.ReadFile(destination)
-		result, _ := json.Marshal(map[string]any{"path": destination, "written": true, "bytes": len(raw), "sha256": fmt.Sprintf("%x", sha256.Sum256(raw)), "at": time.Now().UnixNano()})
-		os.WriteFile("/mnt/tool-result.json", result, 0600)
-		fmt.Print("Saved index.html")
-		return
-	}
 	dir := "/mnt"
 	if len(os.Args) > 1 {
 		dir = os.Args[1]
 	}
 	go watchWeb(dir)
 	go watchGeometry(dir)
-	go watchArtifact(dir)
 	b := &bridge{dir: dir}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v1/chat/completions", b.complete)

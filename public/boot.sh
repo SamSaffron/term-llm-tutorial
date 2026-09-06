@@ -3,10 +3,9 @@
 set -eu
 export HOME=/root XDG_CONFIG_HOME=/root/.config XDG_DATA_HOME=/root/.local/share XDG_CACHE_HOME=/root/.cache
 export TERM=xterm-256color GOMAXPROCS=1 GOGC=50
-export PATH=/tmp:$PATH TERM_LLM_BROWSER_WORKSPACE_FILE=/mnt/active-cwd
-mkdir -p "$XDG_CONFIG_HOME/term-llm/agents/artifact" /mnt/artifact
-ln -s /mnt/artifact /workspace
-cp /mnt/agent.yaml /mnt/system.md "$XDG_CONFIG_HOME/term-llm/agents/artifact/"
+export PATH=/tmp:$PATH
+mkdir -p "$XDG_CONFIG_HOME/term-llm" /mnt/workspace
+ln -s /mnt/workspace /workspace
 cp /mnt/guest-config.yaml "$XDG_CONFIG_HOME/term-llm/config.yaml"
 cp /mnt/term-llm /tmp/term-llm
 cp /mnt/guest-bridge /tmp/guest-bridge
@@ -28,9 +27,7 @@ Four people, one vegetarian.
 Bring sandwiches, fruit, water and a blanket.
 If it rains, meet at the community hall.
 NOTES
-printf '/mnt/artifact' > /mnt/active-cwd
 git --version
-cp /tmp/guest-bridge "$XDG_CONFIG_HOME/term-llm/agents/artifact/write-artifact"
 stty cols 90 rows 26
 ifconfig lo up
 /tmp/guest-bridge /mnt >/tmp/bridge.log 2>&1 &

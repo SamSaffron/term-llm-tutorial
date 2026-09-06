@@ -5,5 +5,5 @@ cd "$(dirname "$0")/.."
 # Point at an isolated, approved checkout, never the shared clone or installed CLI.
 if [ -n "${TERM_LLM_SOURCE:-}" ]; then
   DEST="$(pwd)/public/assets/term-llm"
-  (cd "$TERM_LLM_SOURCE" && test "$(git rev-parse HEAD)" = 08059d2dceb6606e8f190ab3e88103dc53d03b66 && make frontend && CGO_ENABLED=0 GOOS=linux GOARCH=386 GO386=softfloat go build -trimpath -ldflags='-s -w' -o "$DEST" .)
+  (cd "$TERM_LLM_SOURCE" && test "$(git rev-parse HEAD)" = 6f79d50988f33d890b85c66df1168fa371e700a9 && test -z "$(git status --porcelain)" && make frontend && CGO_ENABLED=0 GOOS=linux GOARCH=386 GO386=softfloat go build -trimpath -ldflags='-s -w' -o "$DEST" .)
 fi

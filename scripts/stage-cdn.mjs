@@ -2,8 +2,8 @@
 // .bin is a default Cloudflare cacheable extension; retain each original MIME type.
 import {readFile,writeFile,copyFile} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
-const root='hosting/site/browser-linux-lab';
-const names=['app.css','inference-worker.js','gemma-worker.js','simulator-worker.js','assets/term-llm','assets/guest-bridge','assets/git','assets/picnic-mcp','assets/v86.wasm','assets/zsh-root.tar.gz','zsh-source.tar.gz','sources/git/git-2.50.1.tar.xz','sources/git/zlib-1.3.1.tar.gz',...['wasm','jsep.wasm','asyncify.wasm'].map(s=>`ort/ort-wasm-simd-threaded.${s}`),'app.js'];
+const root='hosting/site/learn';
+const names=['app.css','inference-worker.js','gemma-worker.js','simulator-worker.js','assets/term-llm','assets/guest-bridge','assets/git','assets/picnic-mcp','assets/v86.wasm','assets/ghostty-vt.wasm','assets/zsh-root.tar.gz','zsh-source.tar.gz','sources/git/git-2.50.1.tar.xz','sources/git/zlib-1.3.1.tar.gz',...['wasm','jsep.wasm','asyncify.wasm'].map(s=>`ort/ort-wasm-simd-threaded.${s}`),'app.js'];
 const entries=[];
 for(const name of names){
  if(name==='app.js'){
@@ -17,11 +17,11 @@ for(const name of names){
  const mime=name.endsWith('.css')?'text/css':name.endsWith('.js')?'application/javascript':name.endsWith('.wasm')?'application/wasm':'application/octet-stream';
  entries.push({name,target,sha256:hash,bytes:data.length,mime});
 }
-await writeFile('hosting/browser-linux-lab-assets.conf',entries.map(e=>`location = /browser-linux-lab/${e.name} { return 302 /browser-linux-lab/${e.target}; }
-location = /browser-linux-lab/${e.target} {
+await writeFile('hosting/browser-linux-lab-assets.conf',entries.map(e=>`location = /learn/${e.name} { return 302 /learn/${e.target}; }
+location = /learn/${e.target} {
     default_type ${e.mime};
     try_files $uri =404;
-    include /etc/nginx/snippets/browser-linux-lab-headers.conf;
+    include /etc/nginx/term-llm-tutorial/headers.conf;
     add_header Cache-Control "public, max-age=31536000, immutable";
 }`).join('\n')+'\n');
 await writeFile('hosting/asset-manifest.json',JSON.stringify(entries,null,2)+'\n');

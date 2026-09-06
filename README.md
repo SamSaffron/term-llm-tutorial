@@ -2,7 +2,7 @@
 
 A real Linux terminal on the left, twelve short lessons on the right. Learn shell completion, `ask`, file context and pipes, `exec`, approvals, MCP, chat and resume, save a checklist, then start the real web interface.
 
-**Live:** https://wasnotwas.com/browser-linux-lab/
+**Live:** https://term-llm.com/learn/
 
 ## Two modes
 
@@ -35,12 +35,12 @@ The bootstrap downloads hash-pinned existing public runtime binaries and require
 - `public/simulator.mjs`, `simulator-worker.mjs`: bounded scripted provider, no network/filesystem/model access.
 - `public/boot.sh`, `guest-config.yaml`: guest setup, seeded notes, completion, prompt approval default.
 - `guest/`: Go localhost HTTP/9p bridge; `guest/picnic-mcp/`: real stdio MCP server.
-- `sources/term-llm-artifact.patch`: complete guest CLI patch against upstream commit `08059d2dceb6606e8f190ab3e88103dc53d03b66`.
+- Native CLI: unmodified upstream `6f79d50988f33d890b85c66df1168fa371e700a9`; no tutorial patch.
 - `scripts/build-guest.sh`, `build-git.sh`: native build recipes. No host service installation.
 - `scripts/stage-hosting.mjs`, `stage-cdn.mjs`: explicit runtime allowlist and content-hashed asset URLs.
 - `hosting/browser-linux-lab*.conf`: scoped nginx templates; adapt paths/includes for your host. Personal SSH/deployment configuration is not in this repository.
 
-The historical artifact bridge/agent code remains as build compatibility support; the current UI has no artifact-preview pane.
+The terminal uses **Ghostty Web 0.4.0** (pinned WASM parser and renderer). The old artifact agent, preview watcher and workspace mailbox have been removed.
 
 ## Tests
 
@@ -49,7 +49,7 @@ npm test
 (cd guest && go test ./...)
 ```
 
-The full browser walkthrough uses an authenticated CDP proxy configured with `JARVIS_BROWSER_BASE_URL` and `JARVIS_BROWSER_TOKEN`. It types actual commands into xterm, checks tool approvals, MCP, resumed chat and the downloaded file:
+The full browser walkthrough uses an authenticated CDP proxy configured with `JARVIS_BROWSER_BASE_URL` and `JARVIS_BROWSER_TOKEN`. It types actual commands into Ghostty Web, checks tool approvals, MCP, resumed chat and the downloaded file:
 
 ```sh
 node scripts/tutorial-e2e.mjs             # live Qwen
@@ -58,11 +58,11 @@ SIMULATOR=1 node scripts/tutorial-e2e.mjs # removes page WebGPU; asserts no mode
 
 These target the hosted URL. For a private staged-static preflight, first run `node scripts/stage-hosting.mjs`, then use `LOCAL_TEST=1`. Tests route static assets only, not fabricated Qwen responses. Browser credentials and recorded transcripts are intentionally excluded from Git.
 
-Both hosted original ten-lesson paths passed September6 2026;25 unit tests passed. This establishes the tutorial path on the tested browser, not perfect arbitrary model answers or universal hardware support.
+The Ghostty/unmodified-CLI migration passed the first eleven lessons in both Simulator and Qwen, including completion, approvals, chat/resume, built-in agents and checklist export. The twelfth lesson separately verifies actual web conversation and Ctrl+C shutdown. This establishes the tutorial path on the tested browser, not perfect arbitrary model answers or universal hardware support.
 
 ## Rebuilding the native CLI
 
-In a separate checkout of upstream term-llm, check out the pinned commit, apply `sources/term-llm-artifact.patch`, then set `TERM_LLM_SOURCE` to that checkout when running `scripts/build-guest.sh`. This builds Linux/i386 with soft-float. The CLI frontend build also needs the toolchain required by that pinned upstream repository. Do not apply the patch to your production checkout.
+In a clean, separate checkout of upstream term-llm, check out `6f79d50988f33d890b85c66df1168fa371e700a9`, then set `TERM_LLM_SOURCE` to that checkout when running `scripts/build-guest.sh`. This builds Linux/i386 with soft-float. The CLI frontend build also needs the toolchain required by that pinned upstream repository. The build refuses a different revision or modified tracked sources.
 
 `node scripts/build.mjs` builds browser bundles, the guest HTTP bridge and the small picnic MCP executable; it does not rebuild the entire CLI or Git. The bootstrap is the quickest way to obtain the already-tested native artifacts. It depends on the pinned public download URLs staying available; all downloaded bytes are verified.
 
@@ -79,3 +79,9 @@ Step12 runs `tl serve web --port 8081 --auth none` inside the guest. Open web in
 `node scripts/tutorial-web.mjs` checks actual Simulator web messages, follow-up and server stop; use `QWEN=1` for real model inference. `LOCAL_TEST=1` uses staged tutorial assets for preflight. These tests do not replace web UI responses or model output.
 
 The Meet agents lesson lists built-ins, inspects shell, and invokes `tl ask @shell` without executing a command. It distinguishes agent configuration from model capability and introduces `agents copy` for customization.
+
+## Push-to-deploy
+
+Pushes to `main` run `.github/workflows/deploy.yml`: JS/Go tests, verified runtime bootstrap, browser/guest build, isolated `/learn/` deployment and public asset/hash/header smoke tests. Pull requests test and build without deploying. Deployment requires `DEPLOY_SSH_KEY`, `DEPLOY_HOST` and pinned `DEPLOY_KNOWN_HOSTS` repository secrets.
+
+The docs repository owns the permanent `include /etc/nginx/term-llm-locations.d/*.conf;` in the term-llm HTTPS vhost. This tutorial owns only `/etc/nginx/term-llm-locations.d/learn.conf`, its headers/assets under `/etc/nginx/term-llm-tutorial/`, and `/var/www/term-llm-tutorial/learn/`. Neither site's Hugo deployment owns these paths. `scripts/deploy-learn.sh` refuses deployment without the include; it never edits the parent vhost.

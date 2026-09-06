@@ -1,0 +1,56 @@
+name: Test and deploy tutorial
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: tutorial-${{ github.event_name == 'pull_request' && github.ref || 'production' }}
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: guest/go.mod
+          cache: false
+      - run: npm ci
+      - name: Unit tests
+        run: |
+          npm test
+          (cd guest && go test ./...)
+      - name: Fetch verified runtime and build
+        run: |
+          node scripts/fetch-runtime.mjs
+          node scripts/build.mjs
+          node scripts/stage-hosting.mjs
+      - name: Configure deployment SSH
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        env:
+          DEPLOY_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+      - name: Deploy learn only
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+        run: bash scripts/deploy-learn.sh
+      - name: Smoke check deployed assets and isolation
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        run: node scripts/smoke-hosting.mjs
+      - name: Remove deployment key
+        if: always()
+        run: rm -f ~/.ssh/id_ed25519

@@ -3,17 +3,16 @@ import {mountTutorial} from './tutorial.mjs';
 import { V86 } from './assets/libv86.mjs';
 import { loadingLine } from './loading-line.mjs';
 import { fetchBootAssets } from './boot-assets.mjs';
-import { FitAddon } from '@xterm/addon-fit';
-import { Terminal } from '@xterm/xterm';
+import { Ghostty, Terminal, FitAddon } from 'ghostty-web';
+const ghostty=await Ghostty.load('assets/ghostty-vt.wasm');
 const $=id=>document.getElementById(id), enc=new TextEncoder(),dec=new TextDecoder();
-const terminal=new Terminal({cols:90,rows:26,convertEol:false,fontSize:12,theme:{background:'#060a10'},scrollback:3000});terminal.open($('terminal'));const fit=new FitAddon();terminal.loadAddon(fit);
-let vm,worker,ready=false,loaded=false,started=false,booting=false,serial='',lastRequest='',polling=false,html='',previewHash='',candidateHash='';
-let lastToolResult='';
+const terminal=new Terminal({ghostty,cols:90,rows:26,convertEol:false,fontSize:12,theme:{background:'#060a10'},scrollback:3000});terminal.open($('terminal'));const fit=new FitAddon();terminal.loadAddon(fit);
+let vm,worker,ready=false,loaded=false,started=false,booting=false,serial='',lastRequest='',polling=false;
 let selectedContext=16384,selectedModel='qwen';
 const modelNames={simulator:'Simulator',qwen:'Qwen3 8B',gemma:'Gemma 270M',functiongemma:'FunctionGemma 270M'};
 const modelIds={simulator:'tutorial-simulator',qwen:'Qwen3-8B-q4f32_1-MLC',gemma:'onnx-community/gemma-3-270m-it-ONNX',functiongemma:'onnx-community/functiongemma-270m-it-ONNX'};
 const web=guestWebBridge(()=>vm);
-const tutorial=mountTutorial($('lesson'),{openWeb:()=>web.open().catch(e=>status(e.message)),saveChecklist:async()=>{try{const data=await vm.read_file('artifact/checklist.txt');const url=URL.createObjectURL(new Blob([data],{type:'text/plain'}));const a=document.createElement('a');a.href=url;a.download='checklist.txt';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}catch{status('No checklist.txt yet. Run the final lesson command first.');}}});
+const tutorial=mountTutorial($('lesson'),{openWeb:()=>web.open().catch(e=>status(e.message)),saveChecklist:async()=>{try{const data=await vm.read_file('workspace/checklist.txt');const url=URL.createObjectURL(new Blob([data],{type:'text/plain'}));const a=document.createElement('a');a.href=url;a.download='checklist.txt';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}catch{status('No checklist.txt yet. Run the final lesson command first.');}}});
 let modeChosen=false;
 function updateLaunchSettings(){
  const sim=$('model').value==='simulator';
@@ -37,12 +36,12 @@ function workerCall(type,request){
   if(data.progress){if(phase==='model'){status(data.progress.text);loadingLine($('progress'),true,data.progress.progress);}return;}
   const p=pending.get(data.id);if(!p)return;clearTimeout(p.timer);pending.delete(data.id);data.error?p.reject(Error(data.error)):p.resolve(data.result);
  };worker.onerror=e=>{resetWorker('Worker crashed: '+e.message+'; existing guest file preserved.');};}
- const id=++seq;return new Promise((resolve,reject)=>{const timer=setTimeout(()=>{resetWorker('Hard model deadline reached; existing guest file preserved. Save HTML before rebooting the model.');},type==='load'?600000:180000);pending.set(id,{resolve,reject,timer});worker.postMessage({id,type,request});controls();});
+ const id=++seq;return new Promise((resolve,reject)=>{const timer=setTimeout(()=>{resetWorker('Hard model deadline reached; existing guest file preserved. Download your checklist before restarting.');},type==='load'?600000:180000);pending.set(id,{resolve,reject,timer});worker.postMessage({id,type,request});controls();});
 }
 $('stop').onclick=()=>fail('Stopped',Error('GPU and Linux released'));
 terminal.onData(data=>{if(terminalLive)vm?.serial0_send(data);});
 $('boot').onclick=async()=>{
- if(booting)return;$('launch-settings').open=false;window.scrollTo({top:0,behavior:'instant'});booting=true;$('context').disabled=true;$('model').disabled=true;$('boot').disabled=true;serial='';cliSerial='';lastRequest='';previewHash='';candidateHash='';html='';lastToolResult='';tutorial.reset();web.reset();$('model-raw').textContent='';$('tool-result').textContent='';selectedContext=Number($('context').value);selectedModel=$('model').value;terminal.reset();
+ if(booting)return;$('launch-settings').open=false;window.scrollTo({top:0,behavior:'instant'});booting=true;$('context').disabled=true;$('model').disabled=true;$('boot').disabled=true;serial='';cliSerial='';lastRequest='';tutorial.reset();web.reset();$('model-raw').textContent='';selectedContext=Number($('context').value);selectedModel=$('model').value;terminal.reset();
  stage('assets','Checking Linux assets · downloading and verifying SHA-256');
  try{
  const bootAssets=await fetchBootAssets();
@@ -71,19 +70,19 @@ let resizeTimer;function resizeTerminal(){clearTimeout(resizeTimer);resizeTimer=
  // Document coordinates keep this stable when the user scrolls to diagnostics.
  const top=container.getBoundingClientRect().top+window.scrollY;
  container.style.maxHeight=`${Math.max(160,(window.visualViewport?.height||innerHeight)-top-16)}px`;
- fit.fit();const cols=Math.min(240,Math.max(2,terminal.cols)),rows=Math.min(80,Math.max(1,terminal.rows));terminal.resize(cols,rows);terminal.refresh(0,rows-1);if(vm&&ready)try{await vm.create_file('geometry.json',enc.encode(JSON.stringify({cols,rows})));}catch{}},80);}
+ fit.fit();const cols=Math.min(240,Math.max(2,terminal.cols)),rows=Math.min(80,Math.max(1,terminal.rows));terminal.resize(cols,rows);if(vm&&ready)try{await vm.create_file('geometry.json',enc.encode(JSON.stringify({cols,rows})));}catch{}},80);}
 const layoutObserver=new ResizeObserver(resizeTerminal);
 for(const element of [$('terminal'),document.querySelector('.workspace-bar'),document.querySelector('.tabs'),document.querySelector('#chat-pane h2')])layoutObserver.observe(element);
-function selectTab(name){document.body.dataset.tab=name;for(const tab of ['chat','preview']){$('tab-'+tab).setAttribute('aria-selected',String(tab===name));}resizeTerminal();if(name==='chat')terminal.focus();}
-$('tab-chat').onclick=()=>selectTab('chat');$('tab-preview').onclick=()=>selectTab('preview');
-for(const name of ['chat','preview'])$('tab-'+name).onkeydown=e=>{if(['ArrowLeft','ArrowRight'].includes(e.key)){e.preventDefault();const other=name==='chat'?'preview':'chat';selectTab(other);$('tab-'+other).focus();}};
+function selectTab(name){document.body.dataset.tab=name;for(const tab of ['chat','guide']){$('tab-'+tab).setAttribute('aria-selected',String(tab===name));}resizeTerminal();if(name==='chat')terminal.focus();}
+$('tab-chat').onclick=()=>selectTab('chat');$('tab-guide').onclick=()=>selectTab('guide');
+for(const name of ['chat','guide'])$('tab-'+name).onkeydown=e=>{if(['ArrowLeft','ArrowRight'].includes(e.key)){e.preventDefault();const other=name==='chat'?'guide':'chat';selectTab(other);$('tab-'+other).focus();}};
 
 window.addEventListener('resize',resizeTerminal);
 window.visualViewport?.addEventListener('resize',resizeTerminal);
 document.fonts.ready.then(resizeTerminal);
 async function installGuest(){
- stage('setup','Installing real CLI · transferring guest tools and compact agent');
- for(const [name,url] of [['term-llm','assets/term-llm'],['guest-bridge','assets/guest-bridge'],['git','assets/git'],['picnic-mcp','assets/picnic-mcp'],['zsh-root.tar','assets/zsh-root.tar.gz'],['guest-config.yaml','guest-config.yaml'],['boot.sh','boot.sh'],['agent.yaml','agent.yaml'],['system.md','system.md']]){
+ stage('setup','Installing real CLI · transferring guest tools');
+ for(const [name,url] of [['term-llm','assets/term-llm'],['guest-bridge','assets/guest-bridge'],['git','assets/git'],['picnic-mcp','assets/picnic-mcp'],['zsh-root.tar','assets/zsh-root.tar.gz'],['guest-config.yaml','guest-config.yaml'],['boot.sh','boot.sh']]){
   const target=vm;const r=await fetch(url,{signal:AbortSignal.timeout(120000)});if(vm!==target)throw Error('Guest stopped');if(!r.ok)throw Error(`${url}: HTTP ${r.status}`);let bytes=new Uint8Array(await (name==='zsh-root.tar'?new Response(r.body.pipeThrough(new DecompressionStream('gzip'))):r).arrayBuffer());if(name==='guest-config.yaml')bytes=enc.encode(dec.decode(bytes).replace('context_window: 4096',`context_window: ${selectedContext}`).replace(modelIds.qwen,modelIds[selectedModel]).replace('__WEB_BASE__',web.base));if(vm!==target)throw Error('Guest stopped');await target.create_file(name,bytes);
  }
  await vm.create_file('web-base',enc.encode(web.base));
@@ -92,7 +91,6 @@ async function installGuest(){
 async function poll(){
  if(!ready||polling)return;polling=true;const target=vm;
  try{
-  try{const result=dec.decode(await target.read_file('tool-result.json'));if(result!==lastToolResult){lastToolResult=result;const parsed=JSON.parse(result);if(parsed.written){$('tool-result').textContent=result;status('Saved model HTML · test interactions before refining');}}}catch{}
   let envelope;try{const bytes=await target.read_file('request.json');if(bytes.length<=256*1024)envelope=JSON.parse(dec.decode(bytes));}catch{}
   if(envelope?.id&&envelope.id!==lastRequest){
    lastRequest=envelope.id;controls();status('Generating locally');event(`Guest HTTP request ${envelope.id}: ${envelope.request.messages?.length} messages, ${(envelope.request.tools||[]).length} tools`);
