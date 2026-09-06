@@ -8,6 +8,6 @@ test('guest web storage does not read or overwrite normal origin preferences',as
  assert.equal(map.get('term_llm_selected_provider'),'host-provider');assert.equal(window.localStorage.getItem('term_llm_selected_provider'),'browser');window.localStorage.clear();assert.equal(map.get('term_llm_token'),'host-secret');
 });
 test('final lesson launches actual serve web with isolated guest port and link',async()=>{
- const {lessons}=await import('../public/tutorial.mjs');assert.equal(lessons.length,12);assert.equal(lessons[11].tasks[0][1],'tl serve web --port 8081 --auth none');
+ const {lessons}=await import('../public/tutorial.mjs');assert.equal(lessons.length,13);assert.equal(lessons[12].tasks[0][1],'tl serve web --port 8081 --auth none');
  const source=await readFile('public/guest-web.mjs','utf8');assert.match(source,/scope:base\(\)\+'\/'/);assert.match(source,/registration\?\.unregister/);
 });

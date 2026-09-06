@@ -7,7 +7,8 @@ export PATH=/tmp:$PATH
 mkdir -p "$XDG_CONFIG_HOME/term-llm" /mnt/workspace
 ln -s /mnt/workspace /workspace
 cp /mnt/guest-config.yaml "$XDG_CONFIG_HOME/term-llm/config.yaml"
-cp /mnt/term-llm /tmp/term-llm
+cp /mnt/term-llm /tmp/term-llm-native
+cp /mnt/term-llm-launch.sh /tmp/term-llm
 cp /mnt/guest-bridge /tmp/guest-bridge
 cp /mnt/git /tmp/git
 cp /mnt/picnic-mcp /tmp/picnic-mcp
@@ -15,7 +16,7 @@ chmod +x /tmp/picnic-mcp
 cat > "$XDG_CONFIG_HOME/term-llm/mcp.json" <<'MCP'
 {"servers":{"picnic":{"command":"/tmp/picnic-mcp"}}}
 MCP
-chmod +x /tmp/term-llm /tmp/guest-bridge /tmp/git
+chmod +x /tmp/term-llm /tmp/term-llm-native /tmp/guest-bridge /tmp/git
 # Offline upstream Git; no host identity, remotes, hooks, or credentials.
 git -C /workspace init -b main
 git -C /workspace config user.name 'Browser Lab'
@@ -41,17 +42,14 @@ cat > /tmp/zsh <<'ZSH_WRAPPER'
 exec /opt/zsh/lib/ld-musl-i386.so.1 --library-path /opt/zsh/lib:/opt/zsh/usr/lib /opt/zsh/bin/zsh "$@"
 ZSH_WRAPPER
 chmod +x /tmp/zsh
-/tmp/term-llm config completion zsh > /root/.term-llm-completion.zsh
+# Shell completion is deliberately left unconfigured here. Lesson 2 has the reader
+# install it, so the tutorial matches what happens on a fresh machine.
 cat > /root/.zshrc <<'ZSH_RC'
 module_path=(/opt/zsh/usr/lib/zsh/5.9 $module_path)
 fpath=(/opt/zsh/usr/share/zsh/5.9/functions/**/*(/) $fpath)
 export TERMINFO=/opt/zsh/etc/terminfo
 export SHELL=/tmp/zsh
 PROMPT='%1~%# '
-autoload -Uz compinit
-compinit -d /root/.zcompdump
-source /root/.term-llm-completion.zsh
-compdef _term-llm tl
 bindkey '^I' expand-or-complete
 chat() {
   /tmp/term-llm chat --provider browser --no-search

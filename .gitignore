@@ -35,3 +35,6 @@ sources/term-llm-*.tar.gz
 *.db-*
 *.log
 .DS_Store
+
+# Isolated terminal trial staging
+hosting/preview/

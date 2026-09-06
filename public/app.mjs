@@ -3,10 +3,9 @@ import {mountTutorial} from './tutorial.mjs';
 import { V86 } from './assets/libv86.mjs';
 import { loadingLine } from './loading-line.mjs';
 import { fetchBootAssets } from './boot-assets.mjs';
-import { Ghostty, Terminal, FitAddon } from 'ghostty-web';
-const ghostty=await Ghostty.load('assets/ghostty-vt.wasm');
+import {createTerminal} from './terminal.mjs';
 const $=id=>document.getElementById(id), enc=new TextEncoder(),dec=new TextDecoder();
-const terminal=new Terminal({ghostty,cols:90,rows:26,convertEol:false,fontSize:12,theme:{background:'#060a10'},scrollback:3000});terminal.open($('terminal'));const fit=new FitAddon();terminal.loadAddon(fit);
+const terminal=await createTerminal($('terminal'));const fit={fit:()=>terminal.fit()};
 let vm,worker,ready=false,loaded=false,started=false,booting=false,serial='',lastRequest='',polling=false;
 let selectedContext=16384,selectedModel='qwen';
 const modelNames={simulator:'Simulator',qwen:'Qwen3 8B',gemma:'Gemma 270M',functiongemma:'FunctionGemma 270M'};
@@ -82,7 +81,7 @@ window.visualViewport?.addEventListener('resize',resizeTerminal);
 document.fonts.ready.then(resizeTerminal);
 async function installGuest(){
  stage('setup','Installing real CLI · transferring guest tools');
- for(const [name,url] of [['term-llm','assets/term-llm'],['guest-bridge','assets/guest-bridge'],['git','assets/git'],['picnic-mcp','assets/picnic-mcp'],['zsh-root.tar','assets/zsh-root.tar.gz'],['guest-config.yaml','guest-config.yaml'],['boot.sh','boot.sh']]){
+ for(const [name,url] of [['term-llm','assets/term-llm'],['guest-bridge','assets/guest-bridge'],['git','assets/git'],['picnic-mcp','assets/picnic-mcp'],['zsh-root.tar','assets/zsh-root.tar.gz'],['guest-config.yaml','guest-config.yaml'],['boot.sh','boot.sh'],['term-llm-launch.sh','term-llm-launch.sh']]){
   const target=vm;const r=await fetch(url,{signal:AbortSignal.timeout(120000)});if(vm!==target)throw Error('Guest stopped');if(!r.ok)throw Error(`${url}: HTTP ${r.status}`);let bytes=new Uint8Array(await (name==='zsh-root.tar'?new Response(r.body.pipeThrough(new DecompressionStream('gzip'))):r).arrayBuffer());if(name==='guest-config.yaml')bytes=enc.encode(dec.decode(bytes).replace('context_window: 4096',`context_window: ${selectedContext}`).replace(modelIds.qwen,modelIds[selectedModel]).replace('__WEB_BASE__',web.base));if(vm!==target)throw Error('Guest stopped');await target.create_file(name,bytes);
  }
  await vm.create_file('web-base',enc.encode(web.base));
@@ -103,10 +102,12 @@ setInterval(()=>poll().catch(e=>event(`Poll error: ${e.message}`)),400);
 window.addEventListener('beforeunload',()=>{web.reset();worker?.terminate();vm?.destroy();});
 event(`crossOriginIsolated=${crossOriginIsolated}; SharedArrayBuffer=${typeof SharedArrayBuffer}; WebGPU=${!!navigator.gpu}`);
 // Read-only diagnostics plus genuine serial/file APIs for reproducible isolated tests.
-window.lab={get webResponse(){return web.lastResponse;},get vm(){return vm;},get serial(){return serial;},get ready(){return ready;},get loaded(){return loaded;},get phase(){return phase;},get started(){return started;},get screen(){return Array.from({length:terminal.buffer.active.length},(_,i)=>terminal.buffer.active.getLine(i)?.translateToString(true)||'').join('\n');},get geometry(){return {cols:terminal.cols,rows:terminal.rows};}};
+window.lab={get graphics(){return terminal.graphics;},get resources(){return terminal.resources;},get webResponse(){return web.lastResponse;},get vm(){return vm;},get serial(){return serial;},get ready(){return ready;},get loaded(){return loaded;},get phase(){return phase;},get started(){return started;},get screen(){return terminal.screen;},get geometry(){return {cols:terminal.cols,rows:terminal.rows};}};
 
 updateLaunchSettings();
 (async()=>{
  let available=false;try{available=!!(await navigator.gpu?.requestAdapter({powerPreference:'high-performance'}));}catch{}
  if(!available&&!booting&&!modeChosen){$('model').value='simulator';updateLaunchSettings();$('capability-note').textContent='No WebGPU adapter detected. Simulator is ready for you.';}
 })();
+
+$('boot').disabled=false;

@@ -10,7 +10,7 @@ This Git repository contains authored source, the npm lockfile, native build rec
 | WebLLM | npm0.2.84 | Apache-2.0 |
 | Qwen3 8B q4f32 | mlc-ai/Qwen3-8B-q4f32_1-MLC revision34026572351006ba1865d11319309b151d9ccf16 | Apache-2.0; visiting browser downloads weights directly from Hugging Face only in Qwen mode |
 | Qwen runtime library | mlc-ai/binary-mlc-llm-libs025bcaf3780fa8254f5e5efd3bfea0a5397248f4, v0_2_84 Qwen3-8B-q4f32_1_cs1k-webgpu.wasm | Apache-2.0; browser fetch |
-| Ghostty Web | npm0.4.0; lockfile authoritative; bundled Ghostty WASM | MIT (`licenses/ghostty-web-LICENSE`) |
+| wterm DOM + Ghostty core | npm0.5.0; lockfile authoritative; bundled Ghostty WASM | Apache-2.0 (`licenses/wterm-LICENSE`); Ghostty MIT (`licenses/ghostty-LICENSE`) |
 | Git |2.50.1, zlib1.3.1, Zig0.14.1 build toolchain | GPL-2.0 / zlib / MIT; exact source checksums and recipe in `scripts/build-git.sh`. Runtime bootstrap fetches corresponding Git/zlib source archives alongside binary |
 | zsh guest environment | zsh5.9-r5 Alpine packages with musl/ncurses/libcap | Notices in `licenses/`; package metadata/patches in `sources/zsh/`; complete public source bundle pinned in runtime manifest |
 | Transformers.js / ONNX Runtime | Lockfile pins; legacy experimental worker source retained | Apache-2.0 / MIT; not used by current Qwen or Simulator mode |

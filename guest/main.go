@@ -126,6 +126,9 @@ func dataRequest(data []byte) json.RawMessage {
 	return e.Request
 }
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "image-demo" {
+		os.Exit(runImageDemo(os.Args[2:], os.Stdout, os.Stderr))
+	}
 	dir := "/mnt"
 	if len(os.Args) > 1 {
 		dir = os.Args[1]

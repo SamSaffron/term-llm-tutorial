@@ -5,3 +5,5 @@
 .lesson-task>p{padding-right:45px}.copy-command{position:absolute;right:0;top:1px;margin:0}.lesson-task pre{font-variant-ligatures:none}
 
 #launch-controls #model{margin-bottom:10px}#capability-note:empty{display:none}#capability-note{margin:0 0 12px}#effective{overflow-wrap:anywhere}
+
+#terminal.wterm{--term-font-size:12px;--term-bg:#060a10;--term-fg:#e5edf6;--term-row-height:14.4px;overflow-y:auto;box-shadow:none;border-radius:0}

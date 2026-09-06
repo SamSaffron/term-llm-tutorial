@@ -1,6 +1,6 @@
 # term-llm interactive tutorial
 
-A real Linux terminal on the left, twelve short lessons on the right. Learn shell completion, `ask`, file context and pipes, `exec`, approvals, MCP, chat and resume, save a checklist, then start the real web interface.
+A real Linux terminal on the left, thirteen short lessons on the right. Learn shell completion, `ask`, file context and pipes, `exec`, approvals, MCP, chat and resume, save a checklist, then start the real web interface.
 
 **Live:** https://term-llm.com/learn/
 
@@ -30,7 +30,7 @@ The bootstrap downloads hash-pinned existing public runtime binaries and require
 ## Source layout
 
 - `public/app.mjs`, `index.html`, `app.css`: terminal, lifecycle and mode selection.
-- `public/tutorial.mjs`: twelve lessons and navigation; navigation never executes commands.
+- `public/tutorial.mjs`: thirteen lessons and navigation; navigation never executes commands.
 - `public/inference-worker.mjs`, `protocol.mjs`, `qwen-tools.mjs`: Qwen transport, native JSON calls, real tool history; legacy XML support retained.
 - `public/simulator.mjs`, `simulator-worker.mjs`: bounded scripted provider, no network/filesystem/model access.
 - `public/boot.sh`, `guest-config.yaml`: guest setup, seeded notes, completion, prompt approval default.
@@ -40,7 +40,7 @@ The bootstrap downloads hash-pinned existing public runtime binaries and require
 - `scripts/stage-hosting.mjs`, `stage-cdn.mjs`: explicit runtime allowlist and content-hashed asset URLs.
 - `hosting/browser-linux-lab*.conf`: scoped nginx templates; adapt paths/includes for your host. Personal SSH/deployment configuration is not in this repository.
 
-The terminal uses **Ghostty Web 0.4.0** (pinned WASM parser and renderer). The old artifact agent, preview watcher and workspace mailbox have been removed.
+The terminal uses **wterm 0.5.0 with its Ghostty core**, DOM text rendering and Kitty graphics. The old artifact agent, preview watcher and workspace mailbox have been removed.
 
 ## Tests
 
@@ -85,3 +85,9 @@ The Meet agents lesson lists built-ins, inspects shell, and invokes `tl ask @she
 Pushes to `main` run `.github/workflows/deploy.yml`: JS/Go tests, verified runtime bootstrap, browser/guest build, isolated `/learn/` deployment and public asset/hash/header smoke tests. Pull requests test and build without deploying. Deployment requires `DEPLOY_SSH_KEY`, `DEPLOY_HOST` and pinned `DEPLOY_KNOWN_HOSTS` repository secrets.
 
 The docs repository owns the permanent `include /etc/nginx/term-llm-locations.d/*.conf;` in the term-llm HTTPS vhost. This tutorial owns only `/etc/nginx/term-llm-locations.d/learn.conf`, its headers/assets under `/etc/nginx/term-llm-tutorial/`, and `/var/www/term-llm-tutorial/learn/`. Neither site's Hugo deployment owns these paths. `scripts/deploy-learn.sh` refuses deployment without the include; it never edits the parent vhost.
+
+## A small Easter egg
+
+Try `term-llm image cat` (or `tl image dog`, `elephant`, `rabbit`, `fox`, `owl`). These are original, **canned illustrations, not AI-generated images**. A guest-only launcher intercepts the image subcommand, saves a real PNG and displays it with Kitty graphics. Every other command invokes the unmodified native term-llm binary. Unknown animals/options fail honestly. `-o file.png`, `-o -` (raw PNG) and `--no-display` are supported; the demo does not claim the full native image command's options.
+
+Images are bundled offline in `guest/demo-images/`; rebuild with `uv run --with pillow scripts/draw-animals.py`. No image model or external image API is connected yet.

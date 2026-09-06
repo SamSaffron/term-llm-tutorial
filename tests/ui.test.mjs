@@ -22,20 +22,25 @@ test('CLI is the only chat composer and Ghostty owns terminal rendering',async()
  assert.doesNotMatch(html,/<textarea|<form|id="(?:send|prompt|chat)"/);
  assert.doesNotMatch(js,/\$\('(?:send|prompt|chat)'\)/);
  assert.match(html,/role="progressbar" aria-labelledby="status"/);
- assert.match(js,/from 'ghostty-web'/);assert.doesNotMatch(js,/@xterm/);
+ assert.match(await readFile('public/terminal.mjs','utf8'),/from '@wterm\/ghostty'/);assert.doesNotMatch(js,/@xterm/);
  assert.match(css,/prefers-reduced-motion:reduce/);
  assert.match(js,/fit\.fit\(\)/);assert.match(js,/create_file\('geometry.json'/);
 });
-test('tutorial has twelve lessons, shell-first boot, prompt approvals and Qwen8B default',async()=>{
- const {lessons}=await import('../public/tutorial.mjs');assert.equal(lessons.length,12);
- assert.match(lessons[1].tasks[0][1],/alias tl=term-llm/);
- assert.ok(lessons[6].tasks.some(t=>t[1]==='tl mcp run picnic checklist guests=4'));
- assert.ok(lessons[8].tasks.some(t=>t[1]==='tl chat --resume'));
+test('tutorial has thirteen lessons, shell-first boot, prompt approvals and Qwen8B default',async()=>{
+ const {lessons}=await import('../public/tutorial.mjs');assert.equal(lessons.length,13);
+ assert.match(lessons[1].tasks[0][1],/config completion zsh --install/);
+ assert.match(lessons[2].tasks[0][1],/alias tl=term-llm/);
+ assert.ok(lessons[2].tasks.some(t=>t[1]==='compdef _term-llm tl'));
+ assert.ok(lessons[7].tasks.some(t=>t[1]==='tl mcp run picnic checklist guests=4'));
+ assert.ok(lessons[9].tasks.some(t=>t[1]==='tl chat --resume'));
  const html=await readFile('public/index.html','utf8'),js=await readFile('public/app.mjs','utf8'),config=await readFile('public/guest-config.yaml','utf8');
  assert.match(html,/id="lesson"/);assert.doesNotMatch(html,/<iframe|Live artifact/);
  assert.match(config,/default_mode: prompt/);assert.match(config,/Qwen3-8B/);
  assert.doesNotMatch(js,/serial0_send\('chat\\n'\)/);
- assert.match(await readFile('public/boot.sh','utf8'),/compdef _term-llm tl/);
+ // The guest must ship WITHOUT term-llm completions so lesson 2 installs them for real.
+ const boot=await readFile('public/boot.sh','utf8');
+ assert.doesNotMatch(boot,/compdef _term-llm tl|term-llm-completion\.zsh|compinit/);
+ assert.match(boot,/bindkey '\^I' expand-or-complete/);
 });
 
 test('guest runtime uses stock CLI without obsolete artifact agent or preview watcher',async()=>{
@@ -44,5 +49,5 @@ test('guest runtime uses stock CLI without obsolete artifact agent or preview wa
  assert.match(boot,/ln -s \/mnt\/workspace \/workspace/);
  assert.match(build,/6f79d50988f33d890b85c66df1168fa371e700a9/);
  assert.match(build,/git status --porcelain/);
- assert.match(app,/Ghostty.load\('assets\/ghostty-vt.wasm'\)/);
+ assert.match(await readFile('public/terminal.mjs','utf8'),/wasmPath:'assets\/ghostty-vt.wasm'/);
 });
