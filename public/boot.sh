@@ -42,14 +42,17 @@ cat > /tmp/zsh <<'ZSH_WRAPPER'
 exec /opt/zsh/lib/ld-musl-i386.so.1 --library-path /opt/zsh/lib:/opt/zsh/usr/lib /opt/zsh/bin/zsh "$@"
 ZSH_WRAPPER
 chmod +x /tmp/zsh
-# Shell completion is deliberately left unconfigured here. Lesson 2 has the reader
-# install it, so the tutorial matches what happens on a fresh machine.
+# The completion system itself is wired up here, the way a distro zsh package does
+# it. term-llm's own completion file is deliberately NOT installed: lesson 2 has the
+# reader install it, so the tutorial matches what happens on a fresh machine.
 cat > /root/.zshrc <<'ZSH_RC'
 module_path=(/opt/zsh/usr/lib/zsh/5.9 $module_path)
 fpath=(/opt/zsh/usr/share/zsh/5.9/functions/**/*(/) $fpath)
+fpath+=(~/.local/share/zsh/site-functions)
 export TERMINFO=/opt/zsh/etc/terminfo
 export SHELL=/tmp/zsh
 PROMPT='%1~%# '
+autoload -Uz compinit && compinit -u
 bindkey '^I' expand-or-complete
 chat() {
   /tmp/term-llm chat --provider browser --no-search

@@ -31,7 +31,6 @@ test('tutorial has thirteen lessons, shell-first boot, prompt approvals and Qwen
  assert.match(lessons[1].tasks[0][1],/config completion zsh --install/);
  // The CLI tells the reader to restart the shell, so the lesson must show how.
  assert.ok(lessons[1].tasks.some(t=>t[1]==='exec $SHELL'));
- assert.match(lessons[1].tasks[1][1],/>> ~\/\.zshrc/);
  assert.match(lessons[2].tasks[0][1],/alias tl=term-llm/);
  assert.ok(lessons[2].tasks.some(t=>t[1]==='compdef _term-llm tl'));
  assert.ok(lessons[7].tasks.some(t=>t[1]==='tl mcp run picnic checklist guests=4'));
@@ -42,10 +41,15 @@ test('tutorial has thirteen lessons, shell-first boot, prompt approvals and Qwen
  assert.match(html,/<a href="\/" class="wordmark"/);
  assert.match(config,/default_mode: prompt/);assert.match(config,/Qwen3-8B/);
  assert.doesNotMatch(js,/serial0_send\('chat\\n'\)/);
- // The guest must ship WITHOUT term-llm completions so lesson 2 installs them for real.
+ // The guest ships with the completion system loaded (as a distro zsh does) but
+ // WITHOUT term-llm's completion file, so lesson 2 installs that for real.
  const boot=await readFile('public/boot.sh','utf8');
- assert.doesNotMatch(boot,/compdef _term-llm tl|term-llm-completion\.zsh|compinit/);
+ assert.doesNotMatch(boot,/compdef _term-llm tl|term-llm-completion\.zsh/);
+ assert.match(boot,/fpath\+=\(~\/\.local\/share\/zsh\/site-functions\)/);
+ assert.match(boot,/autoload -Uz compinit && compinit/);
  assert.match(boot,/bindkey '\^I' expand-or-complete/);
+ // Lesson 2 no longer makes the reader hand-edit ~/.zshrc.
+ assert.doesNotMatch(JSON.stringify(lessons[1]),/>> ~\/\.zshrc/);
 });
 
 test('guest runtime uses stock CLI without obsolete artifact agent or preview watcher',async()=>{

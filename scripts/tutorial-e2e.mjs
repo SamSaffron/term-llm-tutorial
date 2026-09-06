@@ -26,7 +26,6 @@ try{
  // Lesson 2: completions must be genuinely absent, then installed by the reader.
  await p.locator('#terminal textarea').focus();await p.keyboard.type('term-llm ch');await p.keyboard.press('Tab');await p.waitForTimeout(1500);assert.match(await p.evaluate(()=>lab.screen.trimEnd()),/term-llm ch$/,'the guest must not ship preconfigured term-llm completions');await p.keyboard.press('Control+c');await p.waitForTimeout(350);
  assert.match(await shell('term-llm config completion zsh --install','install-completions'),/site-functions/);
- await shell("echo 'fpath+=(~/.local/share/zsh/site-functions)' >> ~/.zshrc; echo 'autoload -Uz compinit && compinit' >> ~/.zshrc",'zshrc');
  // exec $SHELL genuinely restarts the guest shell; .zshrc runs again and re-emits LAB_READY.
  const readyCount=await p.evaluate(()=>(lab.serial.match(/LAB_READY/g)||[]).length);
  await sendCLI(p,'exec $SHELL');await p.waitForFunction(n=>(lab.serial.match(/LAB_READY/g)||[]).length>n,readyCount,{timeout:60000});await p.waitForTimeout(1200);
