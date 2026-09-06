@@ -38,6 +38,8 @@ test('tutorial has thirteen lessons, shell-first boot, prompt approvals and Qwen
  assert.ok(lessons[9].tasks.some(t=>t[1]==='tl chat --resume'));
  const html=await readFile('public/index.html','utf8'),js=await readFile('public/app.mjs','utf8'),config=await readFile('public/guest-config.yaml','utf8');
  assert.match(html,/id="lesson"/);assert.doesNotMatch(html,/<iframe|Live artifact/);
+ // The wordmark leaves the tutorial for the main site, not back to /learn/.
+ assert.match(html,/<a href="\/" class="wordmark"/);
  assert.match(config,/default_mode: prompt/);assert.match(config,/Qwen3-8B/);
  assert.doesNotMatch(js,/serial0_send\('chat\\n'\)/);
  // The guest must ship WITHOUT term-llm completions so lesson 2 installs them for real.
