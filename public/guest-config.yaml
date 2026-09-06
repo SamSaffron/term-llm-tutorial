@@ -1,0 +1,23 @@
+default_provider: browser
+approval:
+  default_mode: prompt
+providers:
+  browser:
+    type: openai_compatible
+    base_url: http://127.0.0.1:8080/v1
+    model: Qwen3-8B-q4f32_1-MLC
+    context_window: 4096
+    max_output_tokens: 2048
+    reasoning: disabled
+skills:
+  enabled: false
+sessions:
+  enabled: true # Guest RAM only; needed for real tool-call refinement history.
+tools:
+  enabled: []
+  max_tool_output_chars: 2500
+
+ask:
+  instructions: "Answer directly and concisely. Use at most 120 words unless asked for more detail. Do not invent dates, places or other facts not supplied by the user."
+chat:
+  instructions: "Answer directly and concisely. Use at most 120 words unless asked for more detail. Do not invent dates, places or other facts not supplied by the user."

@@ -1,0 +1,56 @@
+[
+  {
+    "path": "public/assets/term-llm",
+    "url": "https://wasnotwas.com/browser-linux-lab/assets/term-llm.93cc24182d6e27c5090f.bin",
+    "sha256": "93cc24182d6e27c5090f556bca5913c8779847df0dff9225ab7a0351e88da05d",
+    "bytes": 62234784
+  },
+  {
+    "path": "public/assets/guest-bridge",
+    "url": "https://wasnotwas.com/browser-linux-lab/assets/guest-bridge.72a9cfc89f27ae90e7b2.bin",
+    "sha256": "72a9cfc89f27ae90e7b27e39dbac5450c89f516f8ba54049aa2a9f0e39ccc22b",
+    "bytes": 6500512
+  },
+  {
+    "path": "public/assets/git",
+    "url": "https://wasnotwas.com/browser-linux-lab/assets/git.a11a7f5e7e6929c8ad3d.bin",
+    "sha256": "a11a7f5e7e6929c8ad3db245f0c24a3a92982dce14ec7be6596c0eab7f7dce56",
+    "bytes": 3166172
+  },
+  {
+    "path": "public/assets/v86.wasm",
+    "url": "https://wasnotwas.com/browser-linux-lab/assets/v86.wasm.6121632f6d657d03f228.bin",
+    "sha256": "6121632f6d657d03f2286341ed87edcafd4945fa65ae765b4c7fd0bf2554a9c7",
+    "bytes": 2101621
+  },
+  {
+    "path": "public/assets/libv86.mjs",
+    "url": "https://wasnotwas.com/browser-linux-lab/assets/libv86.mjs",
+    "sha256": "329a9185f889230dfc54c75213e1e6a855b0459d134fe5cbd18cbd402f7cdd30",
+    "bytes": 359445
+  },
+  {
+    "path": "public/assets/zsh-root.tar.gz",
+    "url": "https://wasnotwas.com/browser-linux-lab/assets/zsh-root.tar.gz.581abe4a05594b3792ed.bin",
+    "sha256": "581abe4a05594b3792edfea400b063d0bba61d1107f50d01d5aa1de11cbbc8ba",
+    "bytes": 2202526
+  },
+  {
+    "path": "public/zsh-source.tar.gz",
+    "url": "https://wasnotwas.com/browser-linux-lab/zsh-source.tar.gz.d98d8694fbcc5396759a.bin",
+    "sha256": "d98d8694fbcc5396759a2c216e51a925587af29808d682f9aebd520fba32540d",
+    "bytes": 3346670
+  },
+  {
+    "path": "sources/git/git-2.50.1.tar.xz",
+    "url": "https://wasnotwas.com/browser-linux-lab/sources/git/git-2.50.1.tar.xz.7e3e6c36decbd8f1eedd.bin",
+    "sha256": "7e3e6c36decbd8f1eedd14d42db6674be03671c2204864befa2a41756c5c8fc4",
+    "bytes": 7880972
+  },
+  {
+    "path": "sources/git/zlib-1.3.1.tar.gz",
+    "url": "https://wasnotwas.com/browser-linux-lab/sources/git/zlib-1.3.1.tar.gz.9a93b2b7dfdac77ceba5.bin",
+    "sha256": "9a93b2b7dfdac77ceba5a558a580e74667dd6fede4585b91eefb60f03b72df23",
+    "bytes": 1512791
+  }
+]

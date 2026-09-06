@@ -1,0 +1,20 @@
+name: artifact
+description: Tiny browser artifact builder
+agents_md: "false"
+skills: none
+max_turns: 2
+tools:
+  enabled: []
+  custom:
+    - name: write_artifact
+      description: Write complete inline HTML to index.html in the active guest working directory.
+      script: write-artifact
+      call: json
+      finish: true
+      input:
+        type: object
+        additionalProperties: false
+        properties:
+          content:
+            type: string
+        required: [content]

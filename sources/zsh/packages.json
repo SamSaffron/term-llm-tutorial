@@ -1,0 +1,42 @@
+[
+  {
+    "name": "zsh",
+    "version": "5.9-r5",
+    "url": "https://dl-cdn.alpinelinux.org/alpine/v3.22/main/x86/zsh-5.9-r5.apk",
+    "sha256": "a41f0b9a31729c81ad22ca71085c1d8a2edb64606f4ffef6f2dbc143aad0443b",
+    "license": "MIT-Modern-Variant AND GPL-2.0-only",
+    "aports_commit": "8cd10457339db83d978b3814b239119d64d53832"
+  },
+  {
+    "name": "musl",
+    "version": "1.2.5-r12",
+    "url": "https://dl-cdn.alpinelinux.org/alpine/v3.22/main/x86/musl-1.2.5-r12.apk",
+    "sha256": "d047373c9afb6eaac68df1d03128ac75803350b0368327af85cc95a5b042a1da",
+    "license": "MIT",
+    "aports_commit": "1546f29a1fd233db15464ce000b6247ed71b31e7"
+  },
+  {
+    "name": "libcap2",
+    "version": "2.78-r0",
+    "url": "https://dl-cdn.alpinelinux.org/alpine/v3.22/main/x86/libcap2-2.78-r0.apk",
+    "sha256": "1864d56e4d830adf1c1e220e7f0528d00cc92c41cddca21bb514a5a35ba8f25d",
+    "license": "BSD-3-Clause OR GPL-2.0-only",
+    "aports_commit": "f1c200cd047f2bbd6dfffc9ddb73d9e3a980cdea"
+  },
+  {
+    "name": "libncursesw",
+    "version": "6.5_p20250503-r0",
+    "url": "https://dl-cdn.alpinelinux.org/alpine/v3.22/main/x86/libncursesw-6.5_p20250503-r0.apk",
+    "sha256": "b1262e30c3eb0c9a9b74dba4f33c36ca37e33c4a060429af22f371236bfd4d61",
+    "license": "X11",
+    "aports_commit": "3fefbe8dda8b3e85458edb190e2f3a69ad16035c"
+  },
+  {
+    "name": "ncurses-terminfo-base",
+    "version": "6.5_p20250503-r0",
+    "url": "https://dl-cdn.alpinelinux.org/alpine/v3.22/main/x86/ncurses-terminfo-base-6.5_p20250503-r0.apk",
+    "sha256": "3264426877964e0ac55488ede6313e907d3663f831008b45fa27c95d60ac34b8",
+    "license": "X11",
+    "aports_commit": "3fefbe8dda8b3e85458edb190e2f3a69ad16035c"
+  }
+]

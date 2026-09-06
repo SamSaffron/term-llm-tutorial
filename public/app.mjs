@@ -1,0 +1,111 @@
+import {mountTutorial} from './tutorial.mjs';
+import { V86 } from './assets/libv86.mjs';
+import { loadingLine } from './loading-line.mjs';
+import { fetchBootAssets } from './boot-assets.mjs';
+import { FitAddon } from '@xterm/addon-fit';
+import { Terminal } from '@xterm/xterm';
+const $=id=>document.getElementById(id), enc=new TextEncoder(),dec=new TextDecoder();
+const terminal=new Terminal({cols:90,rows:26,convertEol:false,fontSize:12,theme:{background:'#060a10'},scrollback:3000});terminal.open($('terminal'));const fit=new FitAddon();terminal.loadAddon(fit);
+let vm,worker,ready=false,loaded=false,started=false,booting=false,serial='',lastRequest='',polling=false,html='',previewHash='',candidateHash='';
+let lastToolResult='';
+let selectedContext=16384,selectedModel='qwen';
+const modelNames={simulator:'Simulator',qwen:'Qwen3 8B',gemma:'Gemma 270M',functiongemma:'FunctionGemma 270M'};
+const modelIds={simulator:'tutorial-simulator',qwen:'Qwen3-8B-q4f32_1-MLC',gemma:'onnx-community/gemma-3-270m-it-ONNX',functiongemma:'onnx-community/functiongemma-270m-it-ONNX'};
+const tutorial=mountTutorial($('lesson'),{saveChecklist:async()=>{try{const data=await vm.read_file('artifact/checklist.txt');const url=URL.createObjectURL(new Blob([data],{type:'text/plain'}));const a=document.createElement('a');a.href=url;a.download='checklist.txt';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}catch{status('No checklist.txt yet. Run the final lesson command first.');}}});
+let modeChosen=false;
+function updateLaunchSettings(){
+ const sim=$('model').value==='simulator';
+ $('launch-config-summary').textContent=sim?'Simulator · no GPU':`${modelNames[$('model').value]} · ${Number($('context').value)/1024}K`;
+ $('context').disabled=sim||booting;
+ $('mode-note').textContent=sim?'Scripted tutorial responses; the terminal, files, approvals and MCP tools are real. No model download or WebGPU required. Linux and CLI still download (~100 MB).':'Real Qwen inference on your GPU. First launch downloads ~4.6 GB of weights plus runtime; allow roughly 7–10 GB GPU memory. Downloads are cached when possible.';
+}
+$('model').addEventListener('change',()=>{modeChosen=true;updateLaunchSettings();});$('context').addEventListener('change',updateLaunchSettings);
+let seq=0;const pending=new Map();
+function event(text){$('events').textContent+=`${new Date().toISOString()} ${text}\n`;}
+function status(text){if($('status').textContent===text)return;$('status').textContent=text;$('runtime-status').textContent=text;event(text);}
+let failing=false;
+let phase='idle', bootTimer, cliSerial='', terminalLive=false;
+function controls(){$('stop').disabled=!worker&&!vm;}
+function stage(name,label){phase=name;document.body.dataset.phase=name;status(label);loadingLine($('progress'),true);}
+function resetWorker(reason){worker?.terminate();worker=null;loaded=false;for(const p of pending.values()){clearTimeout(p.timer);p.reject(Error(reason));}pending.clear();controls();}
+async function fail(kind,error){if(failing)return;failing=true;clearTimeout(bootTimer);started=false;terminalLive=false;resetWorker(kind);await vm?.destroy();vm=null;ready=false;booting=false;phase='failed';document.body.dataset.phase=phase;$('workspace').hidden=true;$('launch').hidden=false;$('boot').disabled=false;$('boot').textContent=kind==='Stopped'?'Start again':'Try again';$('context').disabled=false;$('model').disabled=false;loadingLine($('progress'),false);status(`${kind}: ${error.message}. ${kind.includes('Model')?'Choose Simulator for a no-GPU tutorial, or use desktop Chrome with WebGPU and a smaller context. ':''}Retry starts a fresh Linux guest; guest files are lost.`);failing=false;}
+function workerCall(type,request){
+ if(!worker){worker=new Worker(selectedModel==='simulator'?'simulator-worker.js':selectedModel==='qwen'?'inference-worker.js':'gemma-worker.js',{type:'module'});worker.onmessage=({data})=>{
+  if(data.diagnostic){$('model-raw').textContent=JSON.stringify(data.diagnostic,null,2);return;}
+  if(data.progress){if(phase==='model'){status(data.progress.text);loadingLine($('progress'),true,data.progress.progress);}return;}
+  const p=pending.get(data.id);if(!p)return;clearTimeout(p.timer);pending.delete(data.id);data.error?p.reject(Error(data.error)):p.resolve(data.result);
+ };worker.onerror=e=>{resetWorker('Worker crashed: '+e.message+'; existing guest file preserved.');};}
+ const id=++seq;return new Promise((resolve,reject)=>{const timer=setTimeout(()=>{resetWorker('Hard model deadline reached; existing guest file preserved. Save HTML before rebooting the model.');},type==='load'?600000:180000);pending.set(id,{resolve,reject,timer});worker.postMessage({id,type,request});controls();});
+}
+$('stop').onclick=()=>fail('Stopped',Error('GPU and Linux released'));
+terminal.onData(data=>{if(terminalLive)vm?.serial0_send(data);});
+$('boot').onclick=async()=>{
+ if(booting)return;$('launch-settings').open=false;window.scrollTo({top:0,behavior:'instant'});booting=true;$('context').disabled=true;$('model').disabled=true;$('boot').disabled=true;serial='';cliSerial='';lastRequest='';previewHash='';candidateHash='';html='';lastToolResult='';tutorial.reset();$('model-raw').textContent='';$('tool-result').textContent='';selectedContext=Number($('context').value);selectedModel=$('model').value;terminal.reset();
+ stage('assets','Checking Linux assets · downloading and verifying SHA-256');
+ try{
+ const bootAssets=await fetchBootAssets();
+ stage('linux','Starting real Linux · waiting for guest shell');
+ bootTimer=setTimeout(()=>fail('Linux failed',Error('Boot/setup deadline reached')),180000);
+ vm=new V86({wasm_path:'assets/v86.wasm',memory_size:512*1024*1024,vga_memory_size:8*1024*1024,...bootAssets,filesystem:{},cmdline:'console=ttyS0 tsc=reliable mitigations=off random.trust_cpu=on',autostart:true,disable_keyboard:true,disable_speaker:true});
+ let injecting=false;
+ vm.add_listener('serial0-output-byte',b=>{const c=String.fromCharCode(b);serial=(serial+c).slice(-24000);$('raw').textContent=serial;
+  if(terminalLive && /\r?\nLAB_CLI_EXIT\r?\n$/.test(serial)){clearTimeout(bootTimer);serial='';cliSerial='';started=false;status('Linux shell · run chat to reopen term-llm');}
+  if(terminalLive){terminal.write(Uint8Array.of(b));cliSerial=(cliSerial+c).slice(-16000);
+   // Observe the real TUI composer, not merely a launched process or a timer.
+   if(!started && /Type a message/.test(cliSerial.replace(/\x1b\[[0-?]*[ -/]*[@-~]/g,''))){clearTimeout(bootTimer);started=true;loadingLine($('progress'),false);phase='ready';document.body.dataset.phase=phase;$('launch').hidden=true;$('workspace').hidden=false;status('Ready · term-llm chat');controls();if(document.body.dataset.tab==='chat')terminal.focus();resizeTerminal();}
+  }
+  if(!injecting && serial.endsWith('~% ')){injecting=true;installGuest().catch(e=>fail('CLI setup failed',e));}
+  if(!ready && /\r?\nLAB_READY\r?\n/.test(serial)){ready=true;clearTimeout(bootTimer);loadAndStart();}
+ });
+ }catch(e){await fail('Linux assets failed',e);}
+};
+async function loadAndStart(){
+ stage('model',selectedModel==='simulator'?'Starting simulator · no model download':`Loading ${modelNames[selectedModel]} · checking local WebGPU`);
+ try{const result=await workerCall('load',{context:selectedContext,backend:selectedModel});loaded=true;$('effective').textContent=selectedModel==='simulator'?'SIMULATOR · scripted responses · real terminal, files and tools':`${modelNames[selectedModel]} · ${result.precision} · ${result.context/1024}K context limit`;$('allocation').textContent=JSON.stringify(result,null,2);}catch(e){await fail('Model unavailable',e);return;}
+ terminal.reset();terminalLive=true;cliSerial='';started=true;phase='ready';document.body.dataset.phase=phase;loadingLine($('progress'),false);$('launch').hidden=true;$('workspace').hidden=false;status('Linux shell · start with the lesson on the right');controls();resizeTerminal();vm.serial0_send('\n');terminal.focus();
+}
+let resizeTimer;function resizeTerminal(){clearTimeout(resizeTimer);resizeTimer=setTimeout(async()=>{const container=$('terminal');if(container.clientWidth<40||container.clientHeight<40)return;
+ // Reserve the actual header/status/tab rows, including wrapping at browser zoom.
+ // Document coordinates keep this stable when the user scrolls to diagnostics.
+ const top=container.getBoundingClientRect().top+window.scrollY;
+ container.style.maxHeight=`${Math.max(160,(window.visualViewport?.height||innerHeight)-top-16)}px`;
+ fit.fit();const cols=Math.min(240,Math.max(2,terminal.cols)),rows=Math.min(80,Math.max(1,terminal.rows));terminal.resize(cols,rows);terminal.refresh(0,rows-1);if(vm&&ready)try{await vm.create_file('geometry.json',enc.encode(JSON.stringify({cols,rows})));}catch{}},80);}
+const layoutObserver=new ResizeObserver(resizeTerminal);
+for(const element of [$('terminal'),document.querySelector('.workspace-bar'),document.querySelector('.tabs'),document.querySelector('#chat-pane h2')])layoutObserver.observe(element);
+function selectTab(name){document.body.dataset.tab=name;for(const tab of ['chat','preview']){$('tab-'+tab).setAttribute('aria-selected',String(tab===name));}resizeTerminal();if(name==='chat')terminal.focus();}
+$('tab-chat').onclick=()=>selectTab('chat');$('tab-preview').onclick=()=>selectTab('preview');
+for(const name of ['chat','preview'])$('tab-'+name).onkeydown=e=>{if(['ArrowLeft','ArrowRight'].includes(e.key)){e.preventDefault();const other=name==='chat'?'preview':'chat';selectTab(other);$('tab-'+other).focus();}};
+
+window.addEventListener('resize',resizeTerminal);
+window.visualViewport?.addEventListener('resize',resizeTerminal);
+document.fonts.ready.then(resizeTerminal);
+async function installGuest(){
+ stage('setup','Installing real CLI · transferring guest tools and compact agent');
+ for(const [name,url] of [['term-llm','assets/term-llm'],['guest-bridge','assets/guest-bridge'],['git','assets/git'],['picnic-mcp','assets/picnic-mcp'],['zsh-root.tar','assets/zsh-root.tar.gz'],['guest-config.yaml','guest-config.yaml'],['boot.sh','boot.sh'],['agent.yaml','agent.yaml'],['system.md','system.md']]){
+  const target=vm;const r=await fetch(url,{signal:AbortSignal.timeout(120000)});if(vm!==target)throw Error('Guest stopped');if(!r.ok)throw Error(`${url}: HTTP ${r.status}`);let bytes=new Uint8Array(await (name==='zsh-root.tar'?new Response(r.body.pipeThrough(new DecompressionStream('gzip'))):r).arrayBuffer());if(name==='guest-config.yaml')bytes=enc.encode(dec.decode(bytes).replace('context_window: 4096',`context_window: ${selectedContext}`).replace(modelIds.qwen,modelIds[selectedModel]));if(vm!==target)throw Error('Guest stopped');await target.create_file(name,bytes);
+ }
+ vm.serial0_send('. /mnt/boot.sh\n');
+}
+async function poll(){
+ if(!ready||polling)return;polling=true;const target=vm;
+ try{
+  try{const result=dec.decode(await target.read_file('tool-result.json'));if(result!==lastToolResult){lastToolResult=result;const parsed=JSON.parse(result);if(parsed.written){$('tool-result').textContent=result;status('Saved model HTML · test interactions before refining');}}}catch{}
+  let envelope;try{const bytes=await target.read_file('request.json');if(bytes.length<=256*1024)envelope=JSON.parse(dec.decode(bytes));}catch{}
+  if(envelope?.id&&envelope.id!==lastRequest){
+   lastRequest=envelope.id;controls();status('Generating locally');event(`Guest HTTP request ${envelope.id}: ${envelope.request.messages?.length} messages, ${(envelope.request.tools||[]).length} tools`);
+   // Keep terminal/lesson UI responsive while inference runs.
+   (async()=>{let reply;try{if(!loaded)throw Error('Model not loaded');reply={id:envelope.id,response:await workerCall('complete',envelope.request)};event(`Local inference returned ${reply.response.choices[0].finish_reason}`);status(`Response ready · local ${modelNames[selectedModel]}`);}catch(e){reply={id:envelope.id,error:e.message};status(`Inference failed: ${e.message}`);}if(vm===target&&ready){await target.create_file('response.json',enc.encode(JSON.stringify(reply)));controls();}})().catch(e=>status(`Bridge write failed: ${e.message}`));
+  }
+ }finally{polling=false;}
+}
+setInterval(()=>poll().catch(e=>event(`Poll error: ${e.message}`)),400);
+window.addEventListener('beforeunload',()=>{worker?.terminate();vm?.destroy();});
+event(`crossOriginIsolated=${crossOriginIsolated}; SharedArrayBuffer=${typeof SharedArrayBuffer}; WebGPU=${!!navigator.gpu}`);
+// Read-only diagnostics plus genuine serial/file APIs for reproducible isolated tests.
+window.lab={get vm(){return vm;},get serial(){return serial;},get ready(){return ready;},get loaded(){return loaded;},get phase(){return phase;},get started(){return started;},get screen(){return Array.from({length:terminal.buffer.active.length},(_,i)=>terminal.buffer.active.getLine(i)?.translateToString(true)||'').join('\n');},get geometry(){return {cols:terminal.cols,rows:terminal.rows};}};
+
+updateLaunchSettings();
+(async()=>{
+ let available=false;try{available=!!(await navigator.gpu?.requestAdapter({powerPreference:'high-performance'}));}catch{}
+ if(!available&&!booting&&!modeChosen){$('model').value='simulator';updateLaunchSettings();$('capability-note').textContent='No WebGPU adapter detected. Simulator is ready for you.';}
+})();
