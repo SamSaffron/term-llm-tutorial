@@ -7,9 +7,9 @@
   },
   {
     "path": "public/assets/guest-bridge",
-    "url": "https://wasnotwas.com/browser-linux-lab/assets/guest-bridge.72a9cfc89f27ae90e7b2.bin",
-    "sha256": "72a9cfc89f27ae90e7b27e39dbac5450c89f516f8ba54049aa2a9f0e39ccc22b",
-    "bytes": 6500512
+    "url": "https://wasnotwas.com/browser-linux-lab/assets/guest-bridge.9ad345436bc12c5f4f74.bin",
+    "sha256": "9ad345436bc12c5f4f742192ffb443609b7db4bec75810083701d9f9827743e5",
+    "bytes": 7225504
   },
   {
     "path": "public/assets/git",

@@ -1,6 +1,6 @@
 # term-llm interactive tutorial
 
-A real Linux terminal on the left, ten short lessons on the right. Learn shell completion, `ask`, file context and pipes, `exec`, approvals, MCP, chat and resume, then save a checklist.
+A real Linux terminal on the left, eleven short lessons on the right. Learn shell completion, `ask`, file context and pipes, `exec`, approvals, MCP, chat and resume, save a checklist, then start the real web interface.
 
 **Live:** https://wasnotwas.com/browser-linux-lab/
 
@@ -30,7 +30,7 @@ The bootstrap downloads hash-pinned existing public runtime binaries and require
 ## Source layout
 
 - `public/app.mjs`, `index.html`, `app.css`: terminal, lifecycle and mode selection.
-- `public/tutorial.mjs`: ten lessons and navigation; navigation never executes commands.
+- `public/tutorial.mjs`: eleven lessons and navigation; navigation never executes commands.
 - `public/inference-worker.mjs`, `protocol.mjs`, `qwen-tools.mjs`: Qwen transport, native JSON calls, real tool history; legacy XML support retained.
 - `public/simulator.mjs`, `simulator-worker.mjs`: bounded scripted provider, no network/filesystem/model access.
 - `public/boot.sh`, `guest-config.yaml`: guest setup, seeded notes, completion, prompt approval default.
@@ -58,16 +58,22 @@ SIMULATOR=1 node scripts/tutorial-e2e.mjs # removes page WebGPU; asserts no mode
 
 These target the hosted URL. For a private staged-static preflight, first run `node scripts/stage-hosting.mjs`, then use `LOCAL_TEST=1`. Tests route static assets only, not fabricated Qwen responses. Browser credentials and recorded transcripts are intentionally excluded from Git.
 
-Both hosted ten-lesson paths passed September6 2026;25 unit tests passed. This establishes the tutorial path on the tested browser, not perfect arbitrary model answers or universal hardware support.
+Both hosted original ten-lesson paths passed September6 2026;25 unit tests passed. This establishes the tutorial path on the tested browser, not perfect arbitrary model answers or universal hardware support.
 
 ## Rebuilding the native CLI
 
 In a separate checkout of upstream term-llm, check out the pinned commit, apply `sources/term-llm-artifact.patch`, then set `TERM_LLM_SOURCE` to that checkout when running `scripts/build-guest.sh`. This builds Linux/i386 with soft-float. The CLI frontend build also needs the toolchain required by that pinned upstream repository. Do not apply the patch to your production checkout.
 
-`node scripts/build.mjs` builds browser bundles and the small picnic MCP executable; it does not rebuild the entire CLI or Git. The bootstrap is the quickest way to obtain the already-tested native artifacts. It depends on the pinned public download URLs staying available; all downloaded bytes are verified.
+`node scripts/build.mjs` builds browser bundles, the guest HTTP bridge and the small picnic MCP executable; it does not rebuild the entire CLI or Git. The bootstrap is the quickest way to obtain the already-tested native artifacts. It depends on the pinned public download URLs staying available; all downloaded bytes are verified.
 
 ## Hosting
 
 Keep this deployment directory outside documentation-site `rsync --delete` roots. Serve HTTPS with COOP/COEP and the scoped security headers. Put large runtime files behind a CDN. The staging script writes direct hashed app/worker/CSS URLs so cached redirects cannot keep clients on obsolete providers. Model weights remain upstream downloads rather than passing through the tutorial origin.
 
 Source is MIT; third-party artifacts retain their own licenses. See `LICENSE`, `SOURCES.md` and `licenses/`.
+
+## Web interface lesson
+
+Step11 runs `tl serve web --port 8081 --auth none` inside the guest. Open web interface launches its actual UI in a new tab. A per-guest service worker and bounded9p HTTP relay connect the tab to guest loopback8081; cookies/host bearer tokens are not forwarded. Browser storage is namespaced to avoid reading or changing existing origin chat preferences. Keep the tutorial tab open. Ctrl+C stops the server. PWA installation/notifications are unsupported in this temporary browser-hosted instance.
+
+`node scripts/tutorial-web.mjs` checks actual Simulator web messages, follow-up and server stop; use `QWEN=1` for real model inference. `LOCAL_TEST=1` uses staged tutorial assets for preflight. These tests do not replace web UI responses or model output.

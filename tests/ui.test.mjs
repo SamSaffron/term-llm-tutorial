@@ -26,8 +26,8 @@ test('CLI is the only chat composer and FitAddon sizing parent has no padding',a
  assert.match(css,/prefers-reduced-motion:reduce/);
  assert.match(js,/fit\.fit\(\)/);assert.match(js,/create_file\('geometry.json'/);
 });
-test('tutorial has ten lessons, shell-first boot, prompt approvals and Qwen8B default',async()=>{
- const {lessons}=await import('../public/tutorial.mjs');assert.equal(lessons.length,10);
+test('tutorial has eleven lessons, shell-first boot, prompt approvals and Qwen8B default',async()=>{
+ const {lessons}=await import('../public/tutorial.mjs');assert.equal(lessons.length,11);
  assert.match(lessons[1].tasks[0][1],/alias tl=term-llm/);
  assert.ok(lessons[6].tasks.some(t=>t[1]==='tl mcp run picnic checklist guests=4'));
  assert.ok(lessons[8].tasks.some(t=>t[1]==='tl chat --resume'));

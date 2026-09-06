@@ -1,3 +1,4 @@
+import {guestWebBridge} from './guest-web.mjs';
 import {mountTutorial} from './tutorial.mjs';
 import { V86 } from './assets/libv86.mjs';
 import { loadingLine } from './loading-line.mjs';
@@ -11,7 +12,8 @@ let lastToolResult='';
 let selectedContext=16384,selectedModel='qwen';
 const modelNames={simulator:'Simulator',qwen:'Qwen3 8B',gemma:'Gemma 270M',functiongemma:'FunctionGemma 270M'};
 const modelIds={simulator:'tutorial-simulator',qwen:'Qwen3-8B-q4f32_1-MLC',gemma:'onnx-community/gemma-3-270m-it-ONNX',functiongemma:'onnx-community/functiongemma-270m-it-ONNX'};
-const tutorial=mountTutorial($('lesson'),{saveChecklist:async()=>{try{const data=await vm.read_file('artifact/checklist.txt');const url=URL.createObjectURL(new Blob([data],{type:'text/plain'}));const a=document.createElement('a');a.href=url;a.download='checklist.txt';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}catch{status('No checklist.txt yet. Run the final lesson command first.');}}});
+const web=guestWebBridge(()=>vm);
+const tutorial=mountTutorial($('lesson'),{openWeb:()=>web.open().catch(e=>status(e.message)),saveChecklist:async()=>{try{const data=await vm.read_file('artifact/checklist.txt');const url=URL.createObjectURL(new Blob([data],{type:'text/plain'}));const a=document.createElement('a');a.href=url;a.download='checklist.txt';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}catch{status('No checklist.txt yet. Run the final lesson command first.');}}});
 let modeChosen=false;
 function updateLaunchSettings(){
  const sim=$('model').value==='simulator';
@@ -28,7 +30,7 @@ let phase='idle', bootTimer, cliSerial='', terminalLive=false;
 function controls(){$('stop').disabled=!worker&&!vm;}
 function stage(name,label){phase=name;document.body.dataset.phase=name;status(label);loadingLine($('progress'),true);}
 function resetWorker(reason){worker?.terminate();worker=null;loaded=false;for(const p of pending.values()){clearTimeout(p.timer);p.reject(Error(reason));}pending.clear();controls();}
-async function fail(kind,error){if(failing)return;failing=true;clearTimeout(bootTimer);started=false;terminalLive=false;resetWorker(kind);await vm?.destroy();vm=null;ready=false;booting=false;phase='failed';document.body.dataset.phase=phase;$('workspace').hidden=true;$('launch').hidden=false;$('boot').disabled=false;$('boot').textContent=kind==='Stopped'?'Start again':'Try again';$('context').disabled=false;$('model').disabled=false;loadingLine($('progress'),false);status(`${kind}: ${error.message}. ${kind.includes('Model')?'Choose Simulator for a no-GPU tutorial, or use desktop Chrome with WebGPU and a smaller context. ':''}Retry starts a fresh Linux guest; guest files are lost.`);failing=false;}
+async function fail(kind,error){if(failing)return;failing=true;clearTimeout(bootTimer);started=false;terminalLive=false;resetWorker(kind);web.reset();await vm?.destroy();vm=null;ready=false;booting=false;phase='failed';document.body.dataset.phase=phase;$('workspace').hidden=true;$('launch').hidden=false;$('boot').disabled=false;$('boot').textContent=kind==='Stopped'?'Start again':'Try again';$('context').disabled=false;$('model').disabled=false;loadingLine($('progress'),false);status(`${kind}: ${error.message}. ${kind.includes('Model')?'Choose Simulator for a no-GPU tutorial, or use desktop Chrome with WebGPU and a smaller context. ':''}Retry starts a fresh Linux guest; guest files are lost.`);failing=false;}
 function workerCall(type,request){
  if(!worker){worker=new Worker(selectedModel==='simulator'?'simulator-worker.js':selectedModel==='qwen'?'inference-worker.js':'gemma-worker.js',{type:'module'});worker.onmessage=({data})=>{
   if(data.diagnostic){$('model-raw').textContent=JSON.stringify(data.diagnostic,null,2);return;}
@@ -40,7 +42,7 @@ function workerCall(type,request){
 $('stop').onclick=()=>fail('Stopped',Error('GPU and Linux released'));
 terminal.onData(data=>{if(terminalLive)vm?.serial0_send(data);});
 $('boot').onclick=async()=>{
- if(booting)return;$('launch-settings').open=false;window.scrollTo({top:0,behavior:'instant'});booting=true;$('context').disabled=true;$('model').disabled=true;$('boot').disabled=true;serial='';cliSerial='';lastRequest='';previewHash='';candidateHash='';html='';lastToolResult='';tutorial.reset();$('model-raw').textContent='';$('tool-result').textContent='';selectedContext=Number($('context').value);selectedModel=$('model').value;terminal.reset();
+ if(booting)return;$('launch-settings').open=false;window.scrollTo({top:0,behavior:'instant'});booting=true;$('context').disabled=true;$('model').disabled=true;$('boot').disabled=true;serial='';cliSerial='';lastRequest='';previewHash='';candidateHash='';html='';lastToolResult='';tutorial.reset();web.reset();$('model-raw').textContent='';$('tool-result').textContent='';selectedContext=Number($('context').value);selectedModel=$('model').value;terminal.reset();
  stage('assets','Checking Linux assets · downloading and verifying SHA-256');
  try{
  const bootAssets=await fetchBootAssets();
@@ -82,8 +84,9 @@ document.fonts.ready.then(resizeTerminal);
 async function installGuest(){
  stage('setup','Installing real CLI · transferring guest tools and compact agent');
  for(const [name,url] of [['term-llm','assets/term-llm'],['guest-bridge','assets/guest-bridge'],['git','assets/git'],['picnic-mcp','assets/picnic-mcp'],['zsh-root.tar','assets/zsh-root.tar.gz'],['guest-config.yaml','guest-config.yaml'],['boot.sh','boot.sh'],['agent.yaml','agent.yaml'],['system.md','system.md']]){
-  const target=vm;const r=await fetch(url,{signal:AbortSignal.timeout(120000)});if(vm!==target)throw Error('Guest stopped');if(!r.ok)throw Error(`${url}: HTTP ${r.status}`);let bytes=new Uint8Array(await (name==='zsh-root.tar'?new Response(r.body.pipeThrough(new DecompressionStream('gzip'))):r).arrayBuffer());if(name==='guest-config.yaml')bytes=enc.encode(dec.decode(bytes).replace('context_window: 4096',`context_window: ${selectedContext}`).replace(modelIds.qwen,modelIds[selectedModel]));if(vm!==target)throw Error('Guest stopped');await target.create_file(name,bytes);
+  const target=vm;const r=await fetch(url,{signal:AbortSignal.timeout(120000)});if(vm!==target)throw Error('Guest stopped');if(!r.ok)throw Error(`${url}: HTTP ${r.status}`);let bytes=new Uint8Array(await (name==='zsh-root.tar'?new Response(r.body.pipeThrough(new DecompressionStream('gzip'))):r).arrayBuffer());if(name==='guest-config.yaml')bytes=enc.encode(dec.decode(bytes).replace('context_window: 4096',`context_window: ${selectedContext}`).replace(modelIds.qwen,modelIds[selectedModel]).replace('__WEB_BASE__',web.base));if(vm!==target)throw Error('Guest stopped');await target.create_file(name,bytes);
  }
+ await vm.create_file('web-base',enc.encode(web.base));
  vm.serial0_send('. /mnt/boot.sh\n');
 }
 async function poll(){
@@ -99,10 +102,10 @@ async function poll(){
  }finally{polling=false;}
 }
 setInterval(()=>poll().catch(e=>event(`Poll error: ${e.message}`)),400);
-window.addEventListener('beforeunload',()=>{worker?.terminate();vm?.destroy();});
+window.addEventListener('beforeunload',()=>{web.reset();worker?.terminate();vm?.destroy();});
 event(`crossOriginIsolated=${crossOriginIsolated}; SharedArrayBuffer=${typeof SharedArrayBuffer}; WebGPU=${!!navigator.gpu}`);
 // Read-only diagnostics plus genuine serial/file APIs for reproducible isolated tests.
-window.lab={get vm(){return vm;},get serial(){return serial;},get ready(){return ready;},get loaded(){return loaded;},get phase(){return phase;},get started(){return started;},get screen(){return Array.from({length:terminal.buffer.active.length},(_,i)=>terminal.buffer.active.getLine(i)?.translateToString(true)||'').join('\n');},get geometry(){return {cols:terminal.cols,rows:terminal.rows};}};
+window.lab={get webResponse(){return web.lastResponse;},get vm(){return vm;},get serial(){return serial;},get ready(){return ready;},get loaded(){return loaded;},get phase(){return phase;},get started(){return started;},get screen(){return Array.from({length:terminal.buffer.active.length},(_,i)=>terminal.buffer.active.getLine(i)?.translateToString(true)||'').join('\n');},get geometry(){return {cols:terminal.cols,rows:terminal.rows};}};
 
 updateLaunchSettings();
 (async()=>{

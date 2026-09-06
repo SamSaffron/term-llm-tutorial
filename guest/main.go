@@ -147,6 +147,7 @@ func main() {
 	if len(os.Args) > 1 {
 		dir = os.Args[1]
 	}
+	go watchWeb(dir)
 	go watchGeometry(dir)
 	go watchArtifact(dir)
 	b := &bridge{dir: dir}

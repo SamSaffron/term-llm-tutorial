@@ -18,3 +18,6 @@ await import('./stage-cdn.mjs');
 
 await mkdir(`${root}/sources/picnic-mcp`,{recursive:true});
 await copyFile('guest/picnic-mcp/main.go',`${root}/sources/picnic-mcp/main.go`);
+
+await mkdir(`${root}/guest-web`,{recursive:true});
+await copyFile('public/guest-web/sw.js',`${root}/guest-web/sw.js`);

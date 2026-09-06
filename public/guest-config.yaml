@@ -21,3 +21,10 @@ ask:
   instructions: "Answer directly and concisely. Use at most 120 words unless asked for more detail. Do not invent dates, places or other facts not supplied by the user."
 chat:
   instructions: "Answer directly and concisely. Use at most 120 words unless asked for more detail. Do not invent dates, places or other facts not supplied by the user."
+
+serve:
+  base_path: __WEB_BASE__
+  title: Tutorial web interface
+  disable_location_sharing: true
+  projects:
+    enabled: false
