@@ -1,6 +1,6 @@
 # term-llm interactive tutorial
 
-A real Linux terminal on the left, eleven short lessons on the right. Learn shell completion, `ask`, file context and pipes, `exec`, approvals, MCP, chat and resume, save a checklist, then start the real web interface.
+A real Linux terminal on the left, twelve short lessons on the right. Learn shell completion, `ask`, file context and pipes, `exec`, approvals, MCP, chat and resume, save a checklist, then start the real web interface.
 
 **Live:** https://wasnotwas.com/browser-linux-lab/
 
@@ -30,7 +30,7 @@ The bootstrap downloads hash-pinned existing public runtime binaries and require
 ## Source layout
 
 - `public/app.mjs`, `index.html`, `app.css`: terminal, lifecycle and mode selection.
-- `public/tutorial.mjs`: eleven lessons and navigation; navigation never executes commands.
+- `public/tutorial.mjs`: twelve lessons and navigation; navigation never executes commands.
 - `public/inference-worker.mjs`, `protocol.mjs`, `qwen-tools.mjs`: Qwen transport, native JSON calls, real tool history; legacy XML support retained.
 - `public/simulator.mjs`, `simulator-worker.mjs`: bounded scripted provider, no network/filesystem/model access.
 - `public/boot.sh`, `guest-config.yaml`: guest setup, seeded notes, completion, prompt approval default.
@@ -74,6 +74,8 @@ Source is MIT; third-party artifacts retain their own licenses. See `LICENSE`, `
 
 ## Web interface lesson
 
-Step11 runs `tl serve web --port 8081 --auth none` inside the guest. Open web interface launches its actual UI in a new tab. A per-guest service worker and bounded9p HTTP relay connect the tab to guest loopback8081; cookies/host bearer tokens are not forwarded. Browser storage is namespaced to avoid reading or changing existing origin chat preferences. Keep the tutorial tab open. Ctrl+C stops the server. PWA installation/notifications are unsupported in this temporary browser-hosted instance.
+Step12 runs `tl serve web --port 8081 --auth none` inside the guest. Open web interface launches its actual UI in a new tab. A per-guest service worker and bounded9p HTTP relay connect the tab to guest loopback8081; cookies/host bearer tokens are not forwarded. Browser storage is namespaced to avoid reading or changing existing origin chat preferences. Keep the tutorial tab open. Ctrl+C stops the server. PWA installation/notifications are unsupported in this temporary browser-hosted instance.
 
 `node scripts/tutorial-web.mjs` checks actual Simulator web messages, follow-up and server stop; use `QWEN=1` for real model inference. `LOCAL_TEST=1` uses staged tutorial assets for preflight. These tests do not replace web UI responses or model output.
+
+The Meet agents lesson lists built-ins, inspects shell, and invokes `tl ask @shell` without executing a command. It distinguishes agent configuration from model capability and introduces `agents copy` for customization.
