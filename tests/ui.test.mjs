@@ -29,6 +29,9 @@ test('CLI is the only chat composer and Ghostty owns terminal rendering',async()
 test('tutorial has thirteen lessons, shell-first boot, prompt approvals and Qwen8B default',async()=>{
  const {lessons}=await import('../public/tutorial.mjs');assert.equal(lessons.length,13);
  assert.match(lessons[1].tasks[0][1],/config completion zsh --install/);
+ // The CLI tells the reader to restart the shell, so the lesson must show how.
+ assert.ok(lessons[1].tasks.some(t=>t[1]==='exec $SHELL'));
+ assert.match(lessons[1].tasks[1][1],/>> ~\/\.zshrc/);
  assert.match(lessons[2].tasks[0][1],/alias tl=term-llm/);
  assert.ok(lessons[2].tasks.some(t=>t[1]==='compdef _term-llm tl'));
  assert.ok(lessons[7].tasks.some(t=>t[1]==='tl mcp run picnic checklist guests=4'));
