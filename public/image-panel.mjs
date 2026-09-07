@@ -43,6 +43,7 @@ export function mountImagePanel({textBusy,suspendText,resumeText,textLabel}) {
  controls();
  return {
   enable,
+  prepare(){paused=true;$('image-panel').open=true;controls();say('Janus selected · accept and enable below, or Reload text.');},
   get state(){return images.state;},
   get blocksText(){return paused||switching||images.state!=='off';},
   async generate(request){

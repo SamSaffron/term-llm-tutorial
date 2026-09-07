@@ -8,37 +8,43 @@ import {mountImagePanel} from '../public/image-panel.mjs';
 function fixture(){
  const elements=new Map();
  const $=id=>{
-  if(!elements.has(id))elements.set(id,{value:id==='launch-mode'?'text':'',checked:false,hidden:false,disabled:false,
+  if(!elements.has(id))elements.set(id,{value:id==='image-support'?'off':id==='model'?'qwen':'',checked:false,hidden:false,disabled:false,
    listeners:{},addEventListener(name,fn){this.listeners[name]=fn;},append(child){child.parent=this;},removeAttribute(){}});
   return elements.get(id);
  };
  const change=id=>$(id).listeners.change?.();
  return {$,change};
 }
-test('default text launch is unchanged and neither selection nor consent downloads images',async()=>{
+test('independent selections: default text boot and Janus preparation never imply consent',async()=>{
  const {$,change}=fixture(),choice=mountLaunchChoice($),calls=[];
- assert.equal(choice.mode,'text');assert.equal(choice.allowed,true);assert.equal($('boot').disabled,false);
- await startProvider(choice.mode,{startText:()=>calls.push('text'),startImages:()=>calls.push('images')});
- assert.deepEqual(calls,['text']);
- $('launch-mode').value='images';change('launch-mode');
- assert.equal(choice.allowed,false);assert.equal($('boot').disabled,true);
- assert.equal($('image-consent-label').parent,$('launch-image-consent'));
- $('image-consent').checked=true;change('image-consent');
- assert.equal(choice.allowed,true);assert.deepEqual(calls,['text']);
+ assert.equal(choice.imageSupport,'off');assert.equal(choice.allowed,true);
+ assert.equal($('image-size-hint').hidden,true);
+ for(const model of ['qwen','simulator']){
+  $('model').value=model;
+  for(const support of ['off','janus']){
+   $('image-support').value=support;change('image-support');
+   assert.equal($('model').value,model);assert.equal(choice.allowed,true);
+   assert.equal($('image-consent').checked,false);
+   await startProvider(choice.imageSupport,{startText:()=>calls.push(model),prepareImages:()=>calls.push('prepare')});
+   assert.equal($('image-size-hint').hidden,support==='off');
+  }
+ }
+ assert.deepEqual(calls,['qwen','prepare','simulator','prepare']);
+ choice.start();assert.equal(choice.allowed,false);assert.equal($('image-support').disabled,true);
+ assert.equal(choice.imageSupport,'janus');assert.equal($('model').value,'simulator');
+ choice.reset();assert.equal(choice.allowed,true);assert.equal($('image-support').disabled,false);
 });
-test('images-first skips all text providers and retains the single consent through boot',async()=>{
- const {$,change}=fixture(),choice=mountLaunchChoice($);
- $('launch-mode').value='images';change('launch-mode');$('image-consent').checked=true;change('image-consent');
- choice.start();assert.equal(choice.allowed,false);assert.equal($('launch-mode').disabled,true);
- assert.equal($('image-consent-label').parent,$('panel-image-consent'));
- let images=0;
- await startProvider(choice.mode,{startText:()=>assert.fail('No Qwen or Simulator load'),startImages:()=>images++});
- assert.equal(images,1);assert.equal($('image-consent').checked,true);
- // Shutdown resets consent in the panel before resetting the gate.
- $('image-consent').checked=false;choice.reset();assert.equal(choice.allowed,false);
- assert.equal($('image-consent-label').parent,$('launch-image-consent'));
- $('launch-mode').value='text';change('launch-mode');assert.equal(choice.allowed,true);
- assert.equal($('image-consent-label').parent,$('panel-image-consent'));
+test('Janus preparation opens existing consent controls without a worker and permits Reload text',async()=>{
+ const {$}=fixture(),order=[],oldDocument=globalThis.document;
+ globalThis.document={getElementById:$};
+ try{
+  const panel=mountImagePanel({textBusy:()=>false,suspendText:()=>assert.fail('no model to release'),resumeText:async()=>order.push('selected LLM'),textLabel:()=> 'Qwen3 8B'});
+  panel.prepare();assert.equal(panel.state,'off');assert.equal(panel.blocksText,true);
+  assert.equal($('image-panel').open,true);assert.equal($('image-enable').disabled,true);
+  assert.equal($('image-text').disabled,false);
+  await panel.enable();assert.equal(panel.state,'off');
+  await $('image-text').onclick();assert.deepEqual(order,['selected LLM']);assert.equal(panel.blocksText,false);
+ }finally{globalThis.document=oldDocument;}
 });
 test('panel refuses unconsented/duplicate enables; releases images before text and resets consent',async()=>{
  const {$}=fixture(),order=[];const oldDocument=globalThis.document,oldWorker=globalThis.Worker;

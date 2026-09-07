@@ -106,20 +106,16 @@ Run the focused grading tests with `node --test tests/tutorial-eval.test.mjs`. M
 
 ## Optional local image generation
 
-At the front gate, choose **Local image generation** under **Start with**.
-Read/accept the linked DeepSeek Model License and ~3 GB download consent, then
-select **Accept & start images**. This boots real Linux and the CLI, then loads
-Janus directly—**no Qwen or Simulator worker loads first**. The text-provider
-selection is retained for a later **Reload text**. “Your first PNG” beside the
-terminal provides a copyable command and a shortcut to the image controls.
+The front gate has independent **LLM** (existing Qwen/Simulator choices) and
+**Image support** (**Off** by default / **Janus**) dropdowns and one Start button.
+Off keeps normal text boot unchanged, with no image downloads. Janus boots Linux
+without loading either model and opens the existing bottom image controls.
+Accept the existing license/download consent and click **Accept & enable Janus**
+to load it; selection and Start alone never download image weights or runtime.
+The selected LLM remains available via **Reload text**, with serialized worker
+switching. Consent resets on shutdown or failed boot and is not persisted.
+The proposed once-off license modal is explicitly **deferred**.
 
-**Text tutorial** remains the default, with the same Qwen/Simulator choices and
-all thirteen lessons. You can also open **Optional image generation** beneath
-the terminal after boot, accept the same consent, and select **Accept & enable
-Janus**. The checkbox moves between the gate and panel; consent is not stored
-and resets on shutdown or failed boot. Selecting images alone does not download
-anything. No image runtime or weights are requested until an affirmative launch
-or enable action.
 This is not an additional lesson and never enables itself from a terminal command.
 
 Once the panel says ready, return to the shell (`/quit` from chat):
@@ -165,7 +161,9 @@ IMAGE_TEST_QWEN=1 node scripts/image-generator-live.mjs    # real Qwen → Janus
 node scripts/image-unsupported-live.mjs                    # controlled worker capability failures
 node scripts/stage-hosting.mjs
 IMAGE_TEST_STAGED=1 node scripts/image-generator-live.mjs # actual hashed staging output
-IMAGE_TEST_LAUNCH=1 IMAGE_TEST_STAGED=1 node scripts/image-generator-live.mjs # images-first → real Qwen
+IMAGE_TEST_LAUNCH=1 IMAGE_TEST_STAGED=1 node scripts/image-generator-live.mjs # Janus selection → consent → real Janus → Qwen
+IMAGE_TEST_CONSENT_ONLY=1 node scripts/image-generator-live.mjs # Off, no image downloads
+IMAGE_TEST_LAUNCH=1 IMAGE_TEST_CONSENT_ONLY=1 node scripts/image-generator-live.mjs # Janus selected, no consent/downloads → Reload text
 ```
 
 These tests create/close only their own tabs and use cached pinned weights where

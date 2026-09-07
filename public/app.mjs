@@ -9,7 +9,7 @@ import {createTerminal} from './terminal.mjs';
 const $=id=>document.getElementById(id), enc=new TextEncoder(),dec=new TextDecoder();
 const terminal=await createTerminal($('terminal'));const fit={fit:()=>terminal.fit()};
 let vm,worker,ready=false,loaded=false,started=false,booting=false,serial='',lastRequest='',polling=false;
-let selectedContext=16384,selectedModel='qwen',startingMode='text';
+let selectedContext=16384,selectedModel='qwen',selectedImageSupport='off';
 const modelNames={simulator:'Simulator',qwen:'Qwen3 8B',gemma:'Gemma 270M',functiongemma:'FunctionGemma 270M'};
 const modelIds={simulator:'tutorial-simulator',qwen:'Qwen3-8B-q4f32_1-MLC',gemma:'onnx-community/gemma-3-270m-it-ONNX',functiongemma:'onnx-community/functiongemma-270m-it-ONNX'};
 const web=guestWebBridge(()=>vm);
@@ -56,7 +56,7 @@ $('image-controls-link').onclick=()=>{$('image-panel').open=true;$('image-panel'
 $('stop').onclick=()=>fail('Stopped',Error('GPU and Linux released'));
 terminal.onData(data=>{if(terminalLive)vm?.serial0_send(data);});
 $('boot').onclick=async()=>{
- if(!launchChoice.allowed)return;startingMode=launchChoice.mode;launchChoice.start();$('launch-settings').open=false;window.scrollTo({top:0,behavior:'instant'});booting=true;$('context').disabled=true;$('model').disabled=true;$('boot').disabled=true;serial='';cliSerial='';lastRequest='';tutorial.reset();web.reset();$('model-raw').textContent='';selectedContext=Number($('context').value);selectedModel=$('model').value;terminal.reset();
+ if(!launchChoice.allowed)return;selectedImageSupport=launchChoice.imageSupport;launchChoice.start();$('launch-settings').open=false;window.scrollTo({top:0,behavior:'instant'});booting=true;$('context').disabled=true;$('model').disabled=true;$('boot').disabled=true;serial='';cliSerial='';lastRequest='';tutorial.reset();web.reset();$('model-raw').textContent='';selectedContext=Number($('context').value);selectedModel=$('model').value;terminal.reset();
  stage('assets','Checking Linux assets · downloading and verifying SHA-256');
  try{
  const bootAssets=await fetchBootAssets();
@@ -76,14 +76,15 @@ $('boot').onclick=async()=>{
  }catch(e){await fail('Linux assets failed',e);}
 };
 async function loadAndStart(){
- try{await startProvider(startingMode,{startText:async()=>{
+ try{await startProvider(selectedImageSupport,{startText:async()=>{
   stage('model',selectedModel==='simulator'?'Starting simulator · no model download':`Loading ${modelNames[selectedModel]} · checking local WebGPU`);
   const result=await workerCall('load',{context:selectedContext,backend:selectedModel});loaded=true;$('effective').textContent=selectedModel==='simulator'?'SIMULATOR · scripted responses · real terminal, files and tools':`${modelNames[selectedModel]} · ${result.precision} · ${result.context/1024}K context limit`;$('allocation').textContent=JSON.stringify(result,null,2);
- },startImages:async()=>{
+ },prepareImages:async()=>{
   $('image-start-guide').hidden=false;
-  images.enable(); // Panel owns consent, progress, errors and cancellation.
+  images.prepare(); // No model load: consent stays in the existing panel.
  } });}catch(e){await fail('Model unavailable',e);return;}
- terminal.reset();terminalLive=true;cliSerial='';started=true;phase='ready';document.body.dataset.phase=phase;loadingLine($('progress'),false);$('launch').hidden=true;$('workspace').hidden=false;status(startingMode==='images'?'Linux shell · Janus loading; follow Your first PNG on the right':'Linux shell · start with the lesson on the right');controls();resizeTerminal();vm.serial0_send('\n');terminal.focus();
+ terminal.reset();terminalLive=true;cliSerial='';started=true;phase='ready';document.body.dataset.phase=phase;loadingLine($('progress'),false);$('launch').hidden=true;$('workspace').hidden=false;status(selectedImageSupport==='janus'?'Linux shell · enable Janus below':'Linux shell · start with the lesson on the right');controls();resizeTerminal();vm.serial0_send('\n');terminal.focus();
+ if(selectedImageSupport==='janus')$('image-panel').scrollIntoView({behavior:'instant'});
 }
 let resizeTimer;function resizeTerminal(){clearTimeout(resizeTimer);resizeTimer=setTimeout(async()=>{const container=$('terminal');if(container.clientWidth<40||container.clientHeight<40)return;
  // Reserve the actual header/status/tab rows, including wrapping at browser zoom.
