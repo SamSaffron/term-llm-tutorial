@@ -5,13 +5,13 @@
 <section id="launch" aria-labelledby="title">
  <p class="eyebrow">FROM YOUR FIRST COMMAND TO A CONVERSATION</p><h1 id="title">Learn by <span>doing.</span></h1>
  <p class="intro">Your terminal on the left. A little guidance on the right.<br>Learn term-llm without installing anything.</p>
- <div id="launch-controls"><label for="model">Choose your experience</label><select id="model"><option value="qwen" selected>Qwen3 8B · real AI · WebGPU</option><option value="simulator">Simulator · scripted tutorial · no GPU</option></select><p id="capability-note" class="model-note"></p><button id="boot" disabled>Start tutorial <span aria-hidden="true">↗</span></button>
+ <div id="launch-controls"><label for="model">Choose your experience</label><select id="model"><option value="qwen" selected>Qwen3 8B · real AI · WebGPU</option><option value="bonsai">Bonsai 8B Q1 · optional real AI · WebGPU</option><option value="simulator">Simulator · scripted tutorial · no GPU</option></select><p id="capability-note" class="model-note"></p><button id="boot" disabled>Start tutorial <span aria-hidden="true">↗</span></button>
  <p id="mode-note" class="launch-consent"></p>
  <div id="launch-feedback"><div id="status" role="status" aria-live="polite"></div><div id="progress" role="progressbar" aria-labelledby="status" aria-valuemin="0" aria-valuemax="1" hidden><span></span></div></div></div>
  <ol class="tutorial-path"><li>01 · Explore the shell</li><li>02 · Ask, act, connect</li><li>03 · Have a conversation</li></ol>
  <details id="launch-settings"><summary>Session settings <span id="launch-config-summary">Qwen3 8B · 16K</span></summary>
  <div class="choices"><div><label for="context">Context limit</label><select id="context"><option value="4096">4K</option><option value="8192">8K</option><option value="16384" selected>16K</option></select></div></div>
- <p class="model-note">Qwen mode runs on your GPU, not a cloud inference service. Simulator mode uses scripted responses, not a model. It needs roughly 7–10 GB of available GPU memory (more context uses more memory). Linux uses an additional 512 MB. Answers can still be wrong—check commands and results.</p>
+ <p class="model-note">Real-model modes run on your GPU, not a cloud inference service. Simulator uses scripted responses, not a model. GPU memory depends on the model and context; larger contexts use more memory. Linux uses an additional 512 MB. Answers can still be wrong—check commands and results.</p>
  <p class="model-note">Reloading or shutting down discards guest files and conversations. The checklist lesson lets you save your work. Nothing runs on your host filesystem.</p></details>
 </section>
 <main id="workspace" hidden>
@@ -21,7 +21,7 @@
  <aside class="pane" id="guide-pane" aria-label="Tutorial guidance"><div id="lesson"></div></aside>
  <details id="image-panel"><summary>Optional image generation · real local Janus · ~3 GB</summary>
   <p>Separate from the six canned image Easter eggs. No image model or runtime downloads until you enable it. Requires WebGPU and several GB of free GPU memory. Generation is local; prompts are not sent to a server. Downloads come from Hugging Face.</p>
-  <p>Enabling releases the text worker (including Qwen) before Janus loads. Text requests pause; your Linux files and tutorial progress remain. Cancel / unload releases Janus, not its browser cache. <strong>Reload text</strong> releases Janus before reloading your chosen text provider. Simulator stays scripted for text; its image generation is real.</p>
+  <p>Enabling releases the selected text worker (Qwen or Bonsai) before Janus loads. Text requests pause; your Linux files and tutorial progress remain. Cancel / unload releases Janus, not its browser cache. <strong>Reload text</strong> releases Janus before reloading your chosen text provider. Simulator stays scripted for text; its image generation is real.</p>
   <label><input id="image-consent" type="checkbox"> I agree to the <a href="licenses/Janus-LICENSE-MODEL.txt" target="_blank" rel="noopener">DeepSeek Model License (full copy)</a>, including §5 and all Attachment A use restrictions, as binding terms for my use of this model. I accept responsibility for generated output and consent to download ~3 GB of weights plus tokenizer/runtime.</label>
   <div class="image-actions"><button id="image-enable" disabled>Accept &amp; enable Janus (~3 GB)</button><button id="image-cancel" disabled>Cancel / unload Janus</button><button id="image-text" disabled>Reload text</button></div>
   <p id="image-status" role="status" aria-live="polite">Off · no image downloads until you accept and enable.</p>
@@ -32,5 +32,5 @@
  </details>
  <p class="workspace-hint">Type commands in the terminal. Back / Next never run commands or reset your files. In chat, /quit returns to the shell.</p>
 </main>
-<details id="diagnostics"><summary>Behind the scenes</summary><p>Real Linux and the native term-llm CLI in both modes. Qwen3 8B runs through WebGPU; Simulator is a clearly labelled scripted provider for practising the same lessons. Tool requests and file contents are genuine. Lesson navigation never fabricates model output or marks model prose as correct. The local picnic MCP server has no network access.</p><pre id="events"></pre><details><summary>Runtime allocation</summary><pre id="allocation"></pre></details><details><summary>Last model output — may contain your input</summary><pre id="model-raw"></pre></details><details><summary>Raw Linux serial</summary><pre id="raw"></pre></details></details>
+<details id="diagnostics"><summary>Behind the scenes</summary><p>Real Linux and the native term-llm CLI in all three modes. Qwen3 8B and optional Bonsai 8B Q1 run through WebGPU; Simulator is a clearly labelled scripted provider for practising the same lessons. Tool requests and file contents are genuine. Lesson navigation never fabricates model output or marks model prose as correct. The local picnic MCP server has no network access.</p><pre id="events"></pre><details><summary>Runtime allocation</summary><pre id="allocation"></pre></details><details><summary>Last model output — may contain your input</summary><pre id="model-raw"></pre></details><details><summary>Raw Linux serial</summary><pre id="raw"></pre></details></details>
 <script type="module" src="app.js"></script></body></html>

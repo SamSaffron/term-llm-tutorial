@@ -9,8 +9,8 @@ const $=id=>document.getElementById(id), enc=new TextEncoder(),dec=new TextDecod
 const terminal=await createTerminal($('terminal'));const fit={fit:()=>terminal.fit()};
 let vm,worker,ready=false,loaded=false,started=false,booting=false,serial='',lastRequest='',polling=false;
 let selectedContext=16384,selectedModel='qwen';
-const modelNames={simulator:'Simulator',qwen:'Qwen3 8B',gemma:'Gemma 270M',functiongemma:'FunctionGemma 270M'};
-const modelIds={simulator:'tutorial-simulator',qwen:'Qwen3-8B-q4f32_1-MLC',gemma:'onnx-community/gemma-3-270m-it-ONNX',functiongemma:'onnx-community/functiongemma-270m-it-ONNX'};
+const modelNames={simulator:'Simulator',qwen:'Qwen3 8B',bonsai:'Bonsai 8B Q1',gemma:'Gemma 270M',functiongemma:'FunctionGemma 270M'};
+const modelIds={simulator:'tutorial-simulator',qwen:'Qwen3-8B-q4f32_1-MLC',bonsai:'prism-ml/Bonsai-8B-Q1_0',gemma:'onnx-community/gemma-3-270m-it-ONNX',functiongemma:'onnx-community/functiongemma-270m-it-ONNX'};
 const web=guestWebBridge(()=>vm);
 const tutorial=mountTutorial($('lesson'),{openWeb:()=>web.open().catch(e=>status(e.message)),saveChecklist:async()=>{try{const data=await vm.read_file('workspace/checklist.txt');const url=URL.createObjectURL(new Blob([data],{type:'text/plain'}));const a=document.createElement('a');a.href=url;a.download='checklist.txt';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}catch{status('No checklist.txt yet. Run the final lesson command first.');}}});
 let modeChosen=false;
@@ -18,7 +18,7 @@ function updateLaunchSettings(){
  const sim=$('model').value==='simulator';
  $('launch-config-summary').textContent=sim?'Simulator · no GPU':`${modelNames[$('model').value]} · ${Number($('context').value)/1024}K`;
  $('context').disabled=sim||booting;
- $('mode-note').textContent=sim?'Scripted tutorial responses; the terminal, files, approvals and MCP tools are real. No model download or WebGPU required. Linux and CLI still download (~100 MB).':'Real Qwen inference on your GPU. First launch downloads ~4.6 GB of weights plus runtime; allow roughly 7–10 GB GPU memory. Downloads are cached when possible.';
+ $('mode-note').textContent=sim?'Scripted tutorial responses; the terminal, files, approvals and MCP tools are real. No model download or WebGPU required. Linux and CLI still download (~100 MB).':$('model').value==='bonsai'?'Real Bonsai Q1 inference on your GPU. First launch downloads 1.16 GB of weights plus tokenizer/runtime. Uses f32 activation and q8 KV; larger contexts need more GPU memory. Cache is best effort; no CPU or cloud fallback.':'Real Qwen inference on your GPU. First launch downloads ~4.6 GB of weights plus runtime; the tested 16K runtime allocates roughly 10 GB of GPU buffers. Downloads are cached when possible.';
 }
 $('model').addEventListener('change',()=>{modeChosen=true;updateLaunchSettings();});$('context').addEventListener('change',updateLaunchSettings);
 let seq=0;const pending=new Map();
@@ -31,9 +31,10 @@ function stage(name,label){phase=name;document.body.dataset.phase=name;status(la
 function resetWorker(reason){worker?.terminate();worker=null;loaded=false;for(const p of pending.values()){clearTimeout(p.timer);p.reject(Error(reason));}pending.clear();controls();}
 async function fail(kind,error){if(failing)return;failing=true;clearTimeout(bootTimer);started=false;terminalLive=false;resetWorker(kind);images.reset();lastImageRequest='';web.reset();await vm?.destroy();vm=null;ready=false;booting=false;phase='failed';document.body.dataset.phase=phase;$('workspace').hidden=true;$('launch').hidden=false;$('boot').disabled=false;$('boot').textContent=kind==='Stopped'?'Start again':'Try again';$('context').disabled=false;$('model').disabled=false;loadingLine($('progress'),false);status(`${kind}: ${error.message}. ${kind.includes('Model')?'Choose Simulator for a no-GPU tutorial, or use desktop Chrome with WebGPU and a smaller context. ':''}Retry starts a fresh Linux guest; guest files are lost.`);failing=false;}
 function workerCall(type,request){
- if(!worker){worker=new Worker(selectedModel==='simulator'?'simulator-worker.js':selectedModel==='qwen'?'inference-worker.js':'gemma-worker.js',{type:'module'});worker.onmessage=({data})=>{
+ if(!worker){worker=new Worker(selectedModel==='simulator'?'simulator-worker.js':selectedModel==='qwen'?'inference-worker.js':selectedModel==='bonsai'?'bonsai-worker.js':'gemma-worker.js',{type:'module'});worker.onmessage=({data})=>{
+  if(data.fatal){resetWorker(data.fatal);$('effective').textContent=`${modelNames[selectedModel]} unavailable · GPU device lost`;status(data.fatal);return;}
   if(data.diagnostic){$('model-raw').textContent=JSON.stringify(data.diagnostic,null,2);return;}
-  if(data.progress){if(phase==='model'){status(data.progress.text);loadingLine($('progress'),true,data.progress.progress);}return;}
+  if(data.progress){if(phase==='model'||textReloading){status(data.progress.text);loadingLine($('progress'),true,data.progress.progress);}return;}
   const p=pending.get(data.id);if(!p)return;clearTimeout(p.timer);pending.delete(data.id);data.error?p.reject(Error(data.error)):p.resolve(data.result);
  };worker.onerror=e=>{resetWorker('Worker crashed: '+e.message+'; existing guest file preserved.');};}
  const id=++seq;return new Promise((resolve,reject)=>{const timer=setTimeout(()=>{resetWorker('Hard model deadline reached; existing guest file preserved. Download your checklist before restarting.');},type==='load'?600000:180000);pending.set(id,{resolve,reject,timer});worker.postMessage({id,type,request});controls();});
@@ -43,8 +44,8 @@ const images=mountImagePanel({
  suspendText:()=>{resetWorker('Text paused for Janus; reload text to continue.');$('effective').textContent=`${modelNames[selectedModel]} text paused · Janus image mode`;},
  resumeText:async()=>{
   textReloading=true;
-  try{const result=await workerCall('load',{context:selectedContext,backend:selectedModel});loaded=true;$('effective').textContent=selectedModel==='simulator'?'SIMULATOR · scripted responses · real terminal, files and tools':`${modelNames[selectedModel]} · ${result.precision} · ${result.context/1024}K context limit`;status('Text ready · Linux files retained');}
-  finally{textReloading=false;}
+  try{const result=await workerCall('load',{context:selectedContext,backend:selectedModel});loaded=true;$('allocation').textContent=JSON.stringify(result,null,2);$('effective').textContent=selectedModel==='simulator'?'SIMULATOR · scripted responses · real terminal, files and tools':`${modelNames[selectedModel]} · ${result.precision} · ${result.context/1024}K context limit`;status('Text ready · Linux files retained');}
+  finally{textReloading=false;loadingLine($('progress'),false);}
  },textLabel:()=>modelNames[selectedModel],
 });
 let textReloading=false,lastImageRequest='';
