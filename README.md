@@ -82,7 +82,7 @@ The Meet agents lesson lists built-ins, inspects shell, and invokes `tl ask @she
 
 ## Push-to-deploy
 
-Pushes to `main` run `.github/workflows/deploy.yml`: JS/Go tests, verified runtime bootstrap, and a browser/guest build on a runner without deployment secrets. Pull requests only test and build. The separate deployment job consumes that run's static artifact, uses the `production` environment, and runs only when `PRODUCTION_DEPLOY_ENABLED=true`. **Keep that variable unset until environment approvals and restricted SSH are verified.**
+Pushes to `main` run `.github/workflows/deploy.yml`: JS/Go tests, verified runtime bootstrap, and a browser/guest build on a runner without deployment secrets. Pull requests only test and build. The separate deployment job consumes that run's static artifact, uses the `production` environment, and runs only when `PRODUCTION_DEPLOY_ENABLED=true`. **Merging a PR to `main` deploys automatically after the build passes; there is no separate deployment approval.**
 
 Deployment credentials belong to `production` environment secrets: `DEPLOY_SSH_KEY`, `DEPLOY_HOST` (the `tutorial-deploy` account), and pinned `DEPLOY_KNOWN_HOSTS`. The upload account is restricted server-side to write-only rsync within the tutorial webroot. It cannot run arbitrary commands, delete files, write nginx configuration, or reload services.
 
