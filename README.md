@@ -93,3 +93,13 @@ The docs repository owns the permanent `include /etc/nginx/term-llm-locations.d/
 Try `term-llm image cat` (or `tl image dog`, `elephant`, `rabbit`, `fox`, `owl`). These are original, **canned illustrations, not AI-generated images**. A guest-only launcher intercepts the image subcommand, saves a real PNG and displays it with Kitty graphics. Every other command invokes the unmodified native term-llm binary. Unknown animals/options fail honestly. `-o file.png`, `-o -` (raw PNG) and `--no-display` are supported; the demo does not claim the full native image command's options.
 
 Images are bundled offline in `guest/demo-images/`; rebuild with `uv run --with pillow scripts/draw-animals.py`. No image model or external image API is connected yet.
+
+## Full-tutorial model evaluation
+
+The [tutorial eval](docs/tutorial-eval.md) runs all **13 lessons** with the real Linux guest and CLI while using a local Ollama model for inference—no WebGPU weights required. It checks actual tools, approvals, MCP, chat/resume, export and the native web UI. Automated checks are necessary but not sufficient: free-text answers still require semantic review.
+
+- [Harness and reproduction instructions](docs/tutorial-eval.md)
+- [First-batch results and corrections](docs/tutorial-eval-results.md)
+- [Five additional models, quantization/thinking comparisons and caveats](docs/tutorial-eval-round2.md)
+
+Run the focused grading tests with `node --test tests/tutorial-eval.test.mjs`. Model evidence stays local under ignored `evidence/tutorial-eval/`; review/redact raw traces before sharing them.

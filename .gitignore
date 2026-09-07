@@ -38,3 +38,6 @@ sources/term-llm-*.tar.gz
 
 # Isolated terminal trial staging
 hosting/preview/
+
+# Also ignore a linked dependency directory in isolated worktrees
+/node_modules
