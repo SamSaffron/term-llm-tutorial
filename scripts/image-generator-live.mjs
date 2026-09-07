@@ -9,8 +9,10 @@ import {createHash} from 'node:crypto';
 const staged=process.env.IMAGE_TEST_STAGED==='1';
 const assetRoot=staged?'hosting/site/learn':'public';
 const manifest=staged?JSON.parse(await fs.readFile('hosting/asset-manifest.json','utf8')):[];
-const qwen=process.env.IMAGE_TEST_QWEN==='1';
-const dir='evidence/optional-janus'+(qwen?'-qwen':'')+(staged?'-staged':'');await fs.mkdir(dir,{recursive:true});
+const qwen=process.env.IMAGE_TEST_QWEN==='1',bonsai=process.env.IMAGE_TEST_BONSAI==='1';
+assert.ok(!(qwen&&bonsai),'Select only one real text model');
+const model=bonsai?'bonsai':qwen?'qwen':'simulator',textPattern=bonsai?/Bonsai 8B Q1/:qwen?/Qwen3 8B/:/SIMULATOR/;
+const dir='evidence/optional-janus'+(bonsai?'-bonsai':qwen?'-qwen':'')+(staged?'-staged':'');await fs.mkdir(dir,{recursive:true});
 const b=await connect(),p=await b.contexts()[0].newPage();
 const origin=process.env.IMAGE_TEST_ORIGIN||'https://term-llm.com';
 const requests=[],events=[],errors=[];let opted=false;
@@ -28,8 +30,8 @@ await p.exposeFunction('imageTestEvent',data=>{if(data.progress?.status==='progr
 await p.addInitScript(()=>{
  window.imageTestWorkers=[];window.imageTestOverlap=false;const W=Worker;
  window.Worker=class extends W{
-  constructor(url,options){super(url,options);this.testURL=String(url);if(!/simulator-worker|image-worker|inference-worker/.test(this.testURL))return;imageTestWorkers.push(this);if(imageTestWorkers.filter(w=>!w.testTerminated).length>1)imageTestOverlap=true;this.addEventListener('message',({data})=>{const clean={...data};if(clean.result?.blob)clean.result={...clean.result,blob:{size:clean.result.blob.size,type:clean.result.blob.type}};imageTestEvent({url:this.testURL,...clean});});}
-  terminate(){this.testTerminated=true;if(/simulator-worker|image-worker|inference-worker/.test(this.testURL))imageTestEvent({url:this.testURL,terminated:true});return super.terminate();}
+  constructor(url,options){super(url,options);this.testURL=String(url);if(!/simulator-worker|image-worker|inference-worker|bonsai-worker/.test(this.testURL))return;imageTestWorkers.push(this);if(imageTestWorkers.filter(w=>!w.testTerminated).length>1)imageTestOverlap=true;this.addEventListener('message',({data})=>{const clean={...data};if(clean.result?.blob)clean.result={...clean.result,blob:{size:clean.result.blob.size,type:clean.result.blob.type}};imageTestEvent({url:this.testURL,...clean});});}
+  terminate(){this.testTerminated=true;if(/simulator-worker|image-worker|inference-worker|bonsai-worker/.test(this.testURL))imageTestEvent({url:this.testURL,terminated:true});return super.terminate();}
  };
 });
 async function shell(command,tag,code='0'){
@@ -39,9 +41,9 @@ async function shell(command,tag,code='0'){
 }
 try{
  await p.setViewportSize({width:1440,height:1000});await p.goto(origin+'/learn/');
- await p.locator('#model').selectOption(qwen?'qwen':'simulator');await p.locator('#boot').click();
- await p.waitForFunction(()=>['ready','failed'].includes(lab.phase),null,{timeout:240000});assert.equal(await p.evaluate(()=>lab.phase),'ready',await p.locator('#status').textContent());
- assert.match(await p.locator('#effective').textContent(),qwen?/Qwen3 8B/:/SIMULATOR/);
+ await p.locator('#model').selectOption(model);if(process.env.IMAGE_TEST_CONTEXT)await p.locator('#context').selectOption(process.env.IMAGE_TEST_CONTEXT);await p.locator('#boot').click();
+ await p.waitForFunction(()=>['ready','failed'].includes(lab.phase),null,{timeout:bonsai?600000:240000});assert.equal(await p.evaluate(()=>lab.phase),'ready',await p.locator('#status').textContent());
+ assert.match(await p.locator('#effective').textContent(),textPattern);
  assert.equal(await p.locator('.wordmark').getAttribute('href'),'/');
  await p.locator('.lesson-nav button').last().click();
  const lesson=await p.locator('.lesson-count').textContent();
@@ -49,7 +51,7 @@ try{
  await shell('term-llm image cat -o canned.png --no-display','canned');
  await shell('term-llm ask "What are three useful things to bring to a picnic?"','text-before');
  const imageRequests=requests.filter(r=>/image-worker|image-runtime|Janus|transformers@3\.8/.test(r.url));assert.deepEqual(imageRequests,[]);
- log('default',{zeroImageRequests:true,simulator:!qwen});
+ log('default',{zeroImageRequests:true,simulator:model==='simulator'});
  await p.locator('#image-panel summary').click();await p.locator('#image-consent').check();opted=true;
  await p.locator('#image-enable').click();
  assert.equal(await p.evaluate(()=>lab.loaded),false);
@@ -75,7 +77,7 @@ try{
  assert.equal(await p.evaluate(async()=>{try{await lab.vm.read_file('workspace/canceled.png');return true;}catch{return false;}}),false);
  assert.equal(await p.evaluate(()=>lab.imageState),'off');
  assert.ok(await p.evaluate(()=>imageTestWorkers.filter(w=>w.testURL.includes('image-worker')).every(w=>w.testTerminated)));
- await p.locator('#image-text').click();await p.waitForFunction(()=>lab.loaded,null,{timeout:120000});assert.match(await p.locator('#effective').textContent(),qwen?/Qwen3 8B/:/SIMULATOR/);
+ await p.locator('#image-text').click();await p.waitForFunction(()=>lab.loaded,null,{timeout:bonsai?600000:120000});assert.match(await p.locator('#effective').textContent(),textPattern);
  await shell('term-llm ask "What are three useful things to bring to a picnic?"','text-after');
  assert.equal(await p.locator('.lesson-count').textContent(),lesson,'switching must preserve tutorial progress');
  await shell('term-llm config completion zsh --install','completion');
@@ -86,7 +88,7 @@ try{
  assert.deepEqual(Buffer.from(await p.evaluate(async()=>Array.from(await lab.vm.read_file('workspace/pelican.png')))),bytes);
  // Cached load can be canceled immediately without leaving an orphan worker.
  await p.locator('#image-enable').click();await p.locator('#image-cancel').click();assert.equal(await p.evaluate(()=>lab.imageState),'off');
- await p.locator('#image-text').click();await p.waitForFunction(()=>lab.loaded,null,{timeout:120000});
+ await p.locator('#image-text').click();await p.waitForFunction(()=>lab.loaded,null,{timeout:bonsai?600000:120000});
  await p.locator('#stop').click();await p.waitForFunction(()=>lab.vm===null);assert.equal(await p.locator('#image-consent').isChecked(),false);
  assert.ok(await p.evaluate(()=>imageTestWorkers.every(w=>w.testTerminated)));
  assert.equal(await p.evaluate(()=>imageTestOverlap),false,'text and image workers must never be resident together');
