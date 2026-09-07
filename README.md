@@ -106,9 +106,20 @@ Run the focused grading tests with `node --test tests/tutorial-eval.test.mjs`. M
 
 ## Optional local image generation
 
-Open **Optional image generation** beneath the terminal. Read/accept the linked
-DeepSeek Model License and ~3 GB download consent, then select **Accept & enable
-Janus**. Nothing in the image runtime or weights is requested before this action.
+At the front gate, choose **Local image generation** under **Start with**.
+Read/accept the linked DeepSeek Model License and ~3 GB download consent, then
+select **Accept & start images**. This boots real Linux and the CLI, then loads
+Janus directly—**no Qwen or Simulator worker loads first**. The text-provider
+selection is retained for a later **Reload text**. “Your first PNG” beside the
+terminal provides a copyable command and a shortcut to the image controls.
+
+**Text tutorial** remains the default, with the same Qwen/Simulator choices and
+all thirteen lessons. You can also open **Optional image generation** beneath
+the terminal after boot, accept the same consent, and select **Accept & enable
+Janus**. The checkbox moves between the gate and panel; consent is not stored
+and resets on shutdown or failed boot. Selecting images alone does not download
+anything. No image runtime or weights are requested until an affirmative launch
+or enable action.
 This is not an additional lesson and never enables itself from a terminal command.
 
 Once the panel says ready, return to the shell (`/quit` from chat):
@@ -154,8 +165,14 @@ IMAGE_TEST_QWEN=1 node scripts/image-generator-live.mjs    # real Qwen → Janus
 node scripts/image-unsupported-live.mjs                    # controlled worker capability failures
 node scripts/stage-hosting.mjs
 IMAGE_TEST_STAGED=1 node scripts/image-generator-live.mjs # actual hashed staging output
+IMAGE_TEST_LAUNCH=1 IMAGE_TEST_STAGED=1 node scripts/image-generator-live.mjs # images-first → real Qwen
 ```
 
 These tests create/close only their own tabs and use cached pinned weights where
 available; they never change browser flags or restart services. Evidence and
 sample PNGs go under ignored `evidence/optional-janus*` directories.
+
+The launch test also captures the front gate, asserts no Qwen/Simulator requests
+before images are ready, generates and saves an actual PNG, checks seeded repeat,
+cancel/unload, Qwen reload and file/lesson preservation, then verifies shutdown
+clears consent. It uses genuine inference, not the unit tests’ DOM/worker fixtures.

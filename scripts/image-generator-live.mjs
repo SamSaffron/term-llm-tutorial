@@ -9,8 +9,9 @@ import {createHash} from 'node:crypto';
 const staged=process.env.IMAGE_TEST_STAGED==='1';
 const assetRoot=staged?'hosting/site/learn':'public';
 const manifest=staged?JSON.parse(await fs.readFile('hosting/asset-manifest.json','utf8')):[];
-const qwen=process.env.IMAGE_TEST_QWEN==='1';
-const dir='evidence/optional-janus'+(qwen?'-qwen':'')+(staged?'-staged':'');await fs.mkdir(dir,{recursive:true});
+const imagesFirst=process.env.IMAGE_TEST_LAUNCH==='1';
+const qwen=imagesFirst||process.env.IMAGE_TEST_QWEN==='1';
+const dir='evidence/optional-janus'+(imagesFirst?'-launch':'')+(qwen?'-qwen':'')+(staged?'-staged':'');await fs.mkdir(dir,{recursive:true});
 const b=await connect(),p=await b.contexts()[0].newPage();
 const origin=process.env.IMAGE_TEST_ORIGIN||'https://term-llm.com';
 const requests=[],events=[],errors=[];let opted=false;
@@ -39,27 +40,50 @@ async function shell(command,tag,code='0'){
 }
 try{
  await p.setViewportSize({width:1440,height:1000});await p.goto(origin+'/learn/');
- await p.locator('#model').selectOption(qwen?'qwen':'simulator');await p.locator('#boot').click();
+ assert.equal(await p.locator('#launch-mode').inputValue(),'text');
+ assert.equal(await p.locator('#model').inputValue(),'qwen');
+ const imageRequests=()=>requests.filter(r=>/image-worker|image-runtime|Janus|transformers@3\.8/.test(r.url));
+ const textRequests=()=>requests.filter(r=>/inference-worker|simulator-worker|Qwen|qwen|web-llm/.test(r.url));
+ await p.screenshot({path:dir+'/front-gate.png'});
+ if(imagesFirst){
+  await p.locator('#launch-mode').selectOption('images');
+  assert.equal(await p.locator('#boot').isDisabled(),true);
+  await p.screenshot({path:dir+'/front-gate-images.png'});
+  assert.deepEqual(imageRequests(),[]);assert.deepEqual(textRequests(),[]);
+  await p.locator('#image-consent').check();opted=true;
+ }else await p.locator('#model').selectOption(qwen?'qwen':'simulator');
+ await p.locator('#boot').click();
  await p.waitForFunction(()=>['ready','failed'].includes(lab.phase),null,{timeout:240000});assert.equal(await p.evaluate(()=>lab.phase),'ready',await p.locator('#status').textContent());
- assert.match(await p.locator('#effective').textContent(),qwen?/Qwen3 8B/:/SIMULATOR/);
  assert.equal(await p.locator('.wordmark').getAttribute('href'),'/');
  await p.locator('.lesson-nav button').last().click();
- const lesson=await p.locator('.lesson-count').textContent();
- await shell('term-llm image --generate "a pelican"','off','1');
- await shell('term-llm image cat -o canned.png --no-display','canned');
- await shell('term-llm ask "What are three useful things to bring to a picnic?"','text-before');
- const imageRequests=requests.filter(r=>/image-worker|image-runtime|Janus|transformers@3\.8/.test(r.url));assert.deepEqual(imageRequests,[]);
- log('default',{zeroImageRequests:true,simulator:!qwen});
- await p.locator('#image-panel summary').click();await p.locator('#image-consent').check();opted=true;
- await p.locator('#image-enable').click();
+ const lesson=await p.locator('#lesson .lesson-count').textContent();
+ if(imagesFirst){
+  assert.deepEqual(textRequests(),[],'images-first must not request Qwen or Simulator');
+  assert.equal(await p.locator('#image-start-guide').isVisible(),true);
+  await p.locator('#image-controls-link').click();
+ }else{
+  assert.match(await p.locator('#effective').textContent(),qwen?/Qwen3 8B/:/SIMULATOR/);
+  await shell('term-llm image --generate "a pelican"','off','1');
+  await shell('term-llm image cat -o canned.png --no-display','canned');
+  await shell('term-llm ask "What are three useful things to bring to a picnic?"','text-before');
+  assert.deepEqual(imageRequests(),[]);
+  log('default',{zeroImageRequests:true,simulator:!qwen});
+  await p.locator('#image-panel summary').click();await p.locator('#image-consent').check();opted=true;
+  await p.locator('#image-enable').click();
+ }
  assert.equal(await p.evaluate(()=>lab.loaded),false);
  await p.waitForFunction(()=>['ready','off'].includes(lab.imageState),null,{timeout:900000});
  assert.equal(await p.evaluate(()=>lab.imageState),'ready',await p.locator('#image-status').textContent());
+ if(imagesFirst)assert.deepEqual(textRequests(),[]);
  log('loaded',await p.locator('#image-status').textContent());
  await shell('term-llm ask "What should I bring?"','text-paused','1');
  const start=Date.now();await shell('term-llm image --generate "A pelican riding a bike." --seed 1 -o pelican.png','generated');
  const bytes=Buffer.from(await p.evaluate(async()=>Array.from(await lab.vm.read_file('workspace/pelican.png'))));
  await fs.writeFile(dir+'/pelican.png',bytes);
+ assert.equal(await p.locator('#image-result').isVisible(),true);
+ assert.equal(await p.locator('#image-preview').evaluate(img=>img.complete&&img.naturalWidth===384),true);
+ const download=await p.locator('#image-download').getAttribute('href');
+ assert.deepEqual(Buffer.from(download.split(',')[1],'base64'),bytes);
  const metadata=JSON.parse(await p.evaluate(async()=>new TextDecoder().decode(await lab.vm.read_file('workspace/pelican.png.json'))));
  assert.equal(metadata.seed,1);assert.equal(metadata.prompt,'A pelican riding a bike.');
  await p.waitForFunction(()=>lab.graphics?.placements?.length>0,null,{timeout:30000});
@@ -77,7 +101,7 @@ try{
  assert.ok(await p.evaluate(()=>imageTestWorkers.filter(w=>w.testURL.includes('image-worker')).every(w=>w.testTerminated)));
  await p.locator('#image-text').click();await p.waitForFunction(()=>lab.loaded,null,{timeout:120000});assert.match(await p.locator('#effective').textContent(),qwen?/Qwen3 8B/:/SIMULATOR/);
  await shell('term-llm ask "What are three useful things to bring to a picnic?"','text-after');
- assert.equal(await p.locator('.lesson-count').textContent(),lesson,'switching must preserve tutorial progress');
+ assert.equal(await p.locator('#lesson .lesson-count').textContent(),lesson,'switching must preserve tutorial progress');
  await shell('term-llm config completion zsh --install','completion');
  const readyCount=await p.evaluate(()=>(lab.serial.match(/LAB_READY/g)||[]).length);
  await sendCLI(p,'exec $SHELL');await p.waitForFunction(n=>(lab.serial.match(/LAB_READY/g)||[]).length>n,readyCount,{timeout:30000});
@@ -89,6 +113,8 @@ try{
  await p.locator('#image-text').click();await p.waitForFunction(()=>lab.loaded,null,{timeout:120000});
  await p.locator('#stop').click();await p.waitForFunction(()=>lab.vm===null);assert.equal(await p.locator('#image-consent').isChecked(),false);
  assert.ok(await p.evaluate(()=>imageTestWorkers.every(w=>w.testTerminated)));
+ assert.equal(await p.locator('#boot').isDisabled(),imagesFirst);
+ assert.deepEqual(requests.filter(r=>!r.opted&&/image-worker|image-runtime|Janus/.test(r.url)),[]);
  assert.equal(await p.evaluate(()=>imageTestOverlap),false,'text and image workers must never be resident together');
  log('passed',{noImageDownloadsBeforeConsent:true,realPNGInGuestAndKitty:true,seedRepeatIdentical:true,textRestored:true,cancelAndShutdownReleaseWorkers:true});
  await fs.writeFile(dir+'/proof.json',JSON.stringify({requests,events,errors,passed:true},null,2));

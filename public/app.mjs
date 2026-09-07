@@ -1,3 +1,4 @@
+import {mountLaunchChoice,startProvider} from './launch-choice.mjs';
 import {mountImagePanel} from './image-panel.mjs';
 import {guestWebBridge} from './guest-web.mjs';
 import {mountTutorial} from './tutorial.mjs';
@@ -8,7 +9,7 @@ import {createTerminal} from './terminal.mjs';
 const $=id=>document.getElementById(id), enc=new TextEncoder(),dec=new TextDecoder();
 const terminal=await createTerminal($('terminal'));const fit={fit:()=>terminal.fit()};
 let vm,worker,ready=false,loaded=false,started=false,booting=false,serial='',lastRequest='',polling=false;
-let selectedContext=16384,selectedModel='qwen';
+let selectedContext=16384,selectedModel='qwen',startingMode='text';
 const modelNames={simulator:'Simulator',qwen:'Qwen3 8B',gemma:'Gemma 270M',functiongemma:'FunctionGemma 270M'};
 const modelIds={simulator:'tutorial-simulator',qwen:'Qwen3-8B-q4f32_1-MLC',gemma:'onnx-community/gemma-3-270m-it-ONNX',functiongemma:'onnx-community/functiongemma-270m-it-ONNX'};
 const web=guestWebBridge(()=>vm);
@@ -29,7 +30,7 @@ let phase='idle', bootTimer, cliSerial='', terminalLive=false;
 function controls(){$('stop').disabled=!worker&&!vm;}
 function stage(name,label){phase=name;document.body.dataset.phase=name;status(label);loadingLine($('progress'),true);}
 function resetWorker(reason){worker?.terminate();worker=null;loaded=false;for(const p of pending.values()){clearTimeout(p.timer);p.reject(Error(reason));}pending.clear();controls();}
-async function fail(kind,error){if(failing)return;failing=true;clearTimeout(bootTimer);started=false;terminalLive=false;resetWorker(kind);images.reset();lastImageRequest='';web.reset();await vm?.destroy();vm=null;ready=false;booting=false;phase='failed';document.body.dataset.phase=phase;$('workspace').hidden=true;$('launch').hidden=false;$('boot').disabled=false;$('boot').textContent=kind==='Stopped'?'Start again':'Try again';$('context').disabled=false;$('model').disabled=false;loadingLine($('progress'),false);status(`${kind}: ${error.message}. ${kind.includes('Model')?'Choose Simulator for a no-GPU tutorial, or use desktop Chrome with WebGPU and a smaller context. ':''}Retry starts a fresh Linux guest; guest files are lost.`);failing=false;}
+async function fail(kind,error){if(failing)return;failing=true;clearTimeout(bootTimer);started=false;terminalLive=false;resetWorker(kind);images.reset();lastImageRequest='';web.reset();await vm?.destroy();vm=null;ready=false;booting=false;phase='failed';document.body.dataset.phase=phase;$('workspace').hidden=true;$('launch').hidden=false;$('boot').disabled=false;$('boot').textContent=kind==='Stopped'?'Start again':'Try again';$('context').disabled=false;$('model').disabled=false;launchChoice.reset();$('image-start-guide').hidden=true;loadingLine($('progress'),false);status(`${kind}: ${error.message}. ${kind.includes('Model')?'Choose Simulator for a no-GPU tutorial, or use desktop Chrome with WebGPU and a smaller context. ':''}Retry starts a fresh Linux guest; guest files are lost.`);failing=false;}
 function workerCall(type,request){
  if(!worker){worker=new Worker(selectedModel==='simulator'?'simulator-worker.js':selectedModel==='qwen'?'inference-worker.js':'gemma-worker.js',{type:'module'});worker.onmessage=({data})=>{
   if(data.diagnostic){$('model-raw').textContent=JSON.stringify(data.diagnostic,null,2);return;}
@@ -45,13 +46,17 @@ const images=mountImagePanel({
   textReloading=true;
   try{const result=await workerCall('load',{context:selectedContext,backend:selectedModel});loaded=true;$('effective').textContent=selectedModel==='simulator'?'SIMULATOR · scripted responses · real terminal, files and tools':`${modelNames[selectedModel]} · ${result.precision} · ${result.context/1024}K context limit`;status('Text ready · Linux files retained');}
   finally{textReloading=false;}
+  $('image-start-guide').hidden=true;
  },textLabel:()=>modelNames[selectedModel],
 });
 let textReloading=false,lastImageRequest='';
+const launchChoice=mountLaunchChoice($);
+$('image-copy').onclick=()=>navigator.clipboard.writeText('term-llm image --generate "A pelican riding a bike." --seed 1 -o pelican.png').catch(e=>status(`Copy failed: ${e.message}`));
+$('image-controls-link').onclick=()=>{$('image-panel').open=true;$('image-panel').scrollIntoView({behavior:'smooth'});};
 $('stop').onclick=()=>fail('Stopped',Error('GPU and Linux released'));
 terminal.onData(data=>{if(terminalLive)vm?.serial0_send(data);});
 $('boot').onclick=async()=>{
- if(booting)return;$('launch-settings').open=false;window.scrollTo({top:0,behavior:'instant'});booting=true;$('context').disabled=true;$('model').disabled=true;$('boot').disabled=true;serial='';cliSerial='';lastRequest='';tutorial.reset();web.reset();$('model-raw').textContent='';selectedContext=Number($('context').value);selectedModel=$('model').value;terminal.reset();
+ if(!launchChoice.allowed)return;startingMode=launchChoice.mode;launchChoice.start();$('launch-settings').open=false;window.scrollTo({top:0,behavior:'instant'});booting=true;$('context').disabled=true;$('model').disabled=true;$('boot').disabled=true;serial='';cliSerial='';lastRequest='';tutorial.reset();web.reset();$('model-raw').textContent='';selectedContext=Number($('context').value);selectedModel=$('model').value;terminal.reset();
  stage('assets','Checking Linux assets · downloading and verifying SHA-256');
  try{
  const bootAssets=await fetchBootAssets();
@@ -71,9 +76,14 @@ $('boot').onclick=async()=>{
  }catch(e){await fail('Linux assets failed',e);}
 };
 async function loadAndStart(){
- stage('model',selectedModel==='simulator'?'Starting simulator · no model download':`Loading ${modelNames[selectedModel]} · checking local WebGPU`);
- try{const result=await workerCall('load',{context:selectedContext,backend:selectedModel});loaded=true;$('effective').textContent=selectedModel==='simulator'?'SIMULATOR · scripted responses · real terminal, files and tools':`${modelNames[selectedModel]} · ${result.precision} · ${result.context/1024}K context limit`;$('allocation').textContent=JSON.stringify(result,null,2);}catch(e){await fail('Model unavailable',e);return;}
- terminal.reset();terminalLive=true;cliSerial='';started=true;phase='ready';document.body.dataset.phase=phase;loadingLine($('progress'),false);$('launch').hidden=true;$('workspace').hidden=false;status('Linux shell · start with the lesson on the right');controls();resizeTerminal();vm.serial0_send('\n');terminal.focus();
+ try{await startProvider(startingMode,{startText:async()=>{
+  stage('model',selectedModel==='simulator'?'Starting simulator · no model download':`Loading ${modelNames[selectedModel]} · checking local WebGPU`);
+  const result=await workerCall('load',{context:selectedContext,backend:selectedModel});loaded=true;$('effective').textContent=selectedModel==='simulator'?'SIMULATOR · scripted responses · real terminal, files and tools':`${modelNames[selectedModel]} · ${result.precision} · ${result.context/1024}K context limit`;$('allocation').textContent=JSON.stringify(result,null,2);
+ },startImages:async()=>{
+  $('image-start-guide').hidden=false;
+  images.enable(); // Panel owns consent, progress, errors and cancellation.
+ } });}catch(e){await fail('Model unavailable',e);return;}
+ terminal.reset();terminalLive=true;cliSerial='';started=true;phase='ready';document.body.dataset.phase=phase;loadingLine($('progress'),false);$('launch').hidden=true;$('workspace').hidden=false;status(startingMode==='images'?'Linux shell · Janus loading; follow Your first PNG on the right':'Linux shell · start with the lesson on the right');controls();resizeTerminal();vm.serial0_send('\n');terminal.focus();
 }
 let resizeTimer;function resizeTerminal(){clearTimeout(resizeTimer);resizeTimer=setTimeout(async()=>{const container=$('terminal');if(container.clientWidth<40||container.clientHeight<40)return;
  // Reserve the actual header/status/tab rows, including wrapping at browser zoom.
@@ -126,4 +136,4 @@ updateLaunchSettings();
  if(!available&&!booting&&!modeChosen){$('model').value='simulator';updateLaunchSettings();$('capability-note').textContent='No WebGPU adapter detected. Simulator is ready for you.';}
 })();
 
-$('boot').disabled=false;
+launchChoice.reset();

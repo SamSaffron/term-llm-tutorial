@@ -2,7 +2,7 @@ import {ImageGenerator} from './image-generator.mjs';
 export function mountImagePanel({textBusy,suspendText,resumeText,textLabel}) {
  const $=id=>document.getElementById(id);
  let switching=false,paused=false,reloadingText=false,epoch=0;
- const say=text=>{$('image-status').textContent=text;};
+ const say=text=>{$('image-status').textContent=text;$('image-start-status').textContent=text;};
  const controls=()=>{
   $('image-enable').disabled=switching||images.state!=='off'||!$('image-consent').checked;
   $('image-cancel').disabled=reloadingText||(!switching&&images.state==='off');
@@ -16,7 +16,8 @@ export function mountImagePanel({textBusy,suspendText,resumeText,textLabel}) {
   else if(p.status==='initiate')say(`Loading ${p.file} · checking cache / download`);
  }});
  $('image-consent').onchange=controls;
- $('image-enable').onclick=async()=>{
+ const enable=async()=>{
+  if(!$('image-consent').checked||switching||images.state!=='off')return;
   if(textBusy()){say('Wait for the current text request to finish before switching.');return;}
   const current=++epoch;switching=true;controls();
   try{
@@ -27,6 +28,7 @@ export function mountImagePanel({textBusy,suspendText,resumeText,textLabel}) {
   }catch(e){if(current===epoch)say(`Image model unavailable: ${e.message} Use Reload text to continue the tutorial.`);}
   finally{if(current===epoch){switching=false;controls();}}
  };
+ $('image-enable').onclick=enable;
  $('image-cancel').onclick=()=>{
   ++epoch;images.reset('Image operation canceled; no generated file returned.');switching=false;controls();
   say('Canceled / unloaded. GPU worker released; cached downloads and saved guest images retained. Reload text to continue.');
@@ -40,6 +42,7 @@ export function mountImagePanel({textBusy,suspendText,resumeText,textLabel}) {
  };
  controls();
  return {
+  enable,
   get state(){return images.state;},
   get blocksText(){return paused||switching||images.state!=='off';},
   async generate(request){
