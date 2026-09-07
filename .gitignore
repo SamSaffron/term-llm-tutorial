@@ -41,3 +41,5 @@ hosting/preview/
 
 # Also ignore a linked dependency directory in isolated worktrees
 /node_modules
+public/image-runtime/
+public/licenses/

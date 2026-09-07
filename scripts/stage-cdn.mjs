@@ -3,7 +3,7 @@
 import {readFile,writeFile,copyFile} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
 const root='hosting/site/learn';
-const names=['app.css','assets/wterm.css','inference-worker.js','gemma-worker.js','simulator-worker.js','assets/term-llm','assets/guest-bridge','assets/git','assets/picnic-mcp','assets/v86.wasm','assets/ghostty-vt.wasm','assets/zsh-root.tar.gz','zsh-source.tar.gz','sources/git/git-2.50.1.tar.xz','sources/git/zlib-1.3.1.tar.gz',...['wasm','jsep.wasm','asyncify.wasm'].map(s=>`ort/ort-wasm-simd-threaded.${s}`),'app.js'];
+const names=['app.css','assets/wterm.css','inference-worker.js','gemma-worker.js','simulator-worker.js','image-worker.js','assets/term-llm','assets/guest-bridge','assets/git','assets/picnic-mcp','assets/v86.wasm','assets/ghostty-vt.wasm','assets/zsh-root.tar.gz','zsh-source.tar.gz','sources/git/git-2.50.1.tar.xz','sources/git/zlib-1.3.1.tar.gz',...['wasm','jsep.wasm','asyncify.wasm'].map(s=>`ort/ort-wasm-simd-threaded.${s}`),'app.js'];
 const entries=[];
 for(const name of names){
  if(name==='app.js'){

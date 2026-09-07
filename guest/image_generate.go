@@ -1,0 +1,179 @@
+package main
+
+import (
+	"bytes"
+	"encoding/base64"
+	"encoding/json"
+	"fmt"
+	"image/png"
+	"os"
+	"os/signal"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"syscall"
+	"time"
+)
+
+type imageRequest struct {
+	ID     string  `json:"id"`
+	Prompt string  `json:"prompt"`
+	Seed   *uint32 `json:"seed,omitempty"`
+}
+type imageResult struct {
+	ID       string `json:"id"`
+	Error    string `json:"error,omitempty"`
+	PNG      string `json:"png,omitempty"`
+	Prompt   string `json:"prompt"`
+	Seed     uint32 `json:"seed"`
+	Model    string `json:"model"`
+	Revision string `json:"revision"`
+}
+
+func parseImageGenerate(args []string) (req imageRequest, output string, display bool, err error) {
+	display = true
+	var words []string
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		switch {
+		case a == "--generate":
+		case a == "--no-display":
+			display = false
+		case a == "--seed" || a == "-o" || a == "--output":
+			i++
+			if i == len(args) {
+				err = fmt.Errorf("missing value for %s", a)
+				return
+			}
+			if a == "--seed" {
+				var n uint64
+				n, err = strconv.ParseUint(args[i], 10, 32)
+				if err != nil {
+					return
+				}
+				seed := uint32(n)
+				req.Seed = &seed
+			} else {
+				output = args[i]
+			}
+		case strings.HasPrefix(a, "-"):
+			err = fmt.Errorf("unsupported generation option %s", a)
+			return
+		default:
+			words = append(words, a)
+		}
+	}
+	req.Prompt = strings.TrimSpace(strings.Join(words, " "))
+	if strings.TrimSpace(req.Prompt) == "" || len(req.Prompt) > 2000 {
+		err = fmt.Errorf("use a prompt of 1–2000 bytes")
+	}
+	return
+}
+func requestImage(dir string, req imageRequest, timeout time.Duration) (imageResult, error) {
+	var result imageResult
+	lock, err := os.OpenFile(filepath.Join(dir, "image.lock"), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+	if err != nil {
+		return result, fmt.Errorf("another image request is active (after an interrupted command, remove /mnt/image.lock)")
+	}
+	lock.Close()
+	defer os.Remove(filepath.Join(dir, "image.lock"))
+	interrupted := make(chan os.Signal, 1)
+	signal.Notify(interrupted, os.Interrupt, syscall.SIGTERM)
+	defer signal.Stop(interrupted)
+	req.ID = fmt.Sprint(time.Now().UnixNano())
+	raw, _ := json.Marshal(req)
+	if err = os.WriteFile(filepath.Join(dir, "image-request.tmp"), raw, 0600); err == nil {
+		err = os.Rename(filepath.Join(dir, "image-request.tmp"), filepath.Join(dir, "image-request.json"))
+	}
+	if err != nil {
+		return result, err
+	}
+	defer os.Remove(filepath.Join(dir, "image-request.json"))
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		raw, err = os.ReadFile(filepath.Join(dir, "image-response.json"))
+		result = imageResult{} // Omitted JSON fields must not retain a stale response error.
+		if err == nil && len(raw) <= 2*1024*1024 && json.Unmarshal(raw, &result) == nil && result.ID == req.ID {
+			if result.Error != "" {
+				return result, fmt.Errorf("%s", result.Error)
+			}
+			if result.Prompt != req.Prompt || (req.Seed != nil && result.Seed != *req.Seed) {
+				return result, fmt.Errorf("image response metadata mismatch")
+			}
+			return result, nil
+		}
+		select {
+		case <-interrupted:
+			return result, fmt.Errorf("image command interrupted; use Cancel / unload in the image panel to stop inference")
+		case <-time.After(100 * time.Millisecond):
+		}
+	}
+	return result, fmt.Errorf("image request timed out; use Cancel / unload in the image panel")
+}
+func generatedPNG(result imageResult) ([]byte, error) {
+	data, err := base64.StdEncoding.DecodeString(result.PNG)
+	if err != nil {
+		return nil, err
+	}
+	config, err := png.DecodeConfig(bytes.NewReader(data))
+	if err != nil || config.Width != 384 || config.Height != 384 {
+		return nil, fmt.Errorf("invalid generated PNG (expected 384 × 384)")
+	}
+	if _, err = png.Decode(bytes.NewReader(data)); err != nil {
+		return nil, err
+	}
+	return data, nil
+}
+func runImageGenerate(args []string, stdout, stderr *os.File) int {
+	for _, arg := range args {
+		if arg == "--help" || arg == "-h" {
+			return runImageDemo([]string{"--help"}, stdout, stderr)
+		}
+	}
+	req, output, display, err := parseImageGenerate(args)
+	if err != nil {
+		fmt.Fprintln(stderr, err)
+		return 2
+	}
+	fmt.Fprintln(stderr, "Requesting genuine local Janus generation. Enable Optional image generation in the browser first; no canned fallback.")
+	result, err := requestImage("/mnt", req, 190*time.Second)
+	if err != nil {
+		fmt.Fprintln(stderr, err)
+		return 1
+	}
+	data, err := generatedPNG(result)
+	if err == nil {
+		if output == "-" {
+			_, err = stdout.Write(data)
+		} else {
+			if output == "" {
+				var f *os.File
+				f, err = os.CreateTemp(".", "janus-*.png")
+				if err == nil {
+					output = f.Name()
+					err = f.Close()
+				}
+			}
+			if err == nil {
+				err = os.WriteFile(output, data, 0644)
+			}
+			if err == nil {
+				result.PNG = ""
+				result.ID = ""
+				metadata, _ := json.MarshalIndent(result, "", "  ")
+				err = os.WriteFile(output+".json", metadata, 0644)
+			}
+			if err == nil {
+				fmt.Fprintf(stderr, "Generated by Janus-Pro-1B · seed %d · prompt: %s\nSaved: %s (metadata: %s.json)\n", result.Seed, result.Prompt, output, output)
+				if display && imageTTY(stdout) {
+					err = writeKittyPNG(stdout, data)
+				}
+			}
+		}
+	}
+	if err != nil {
+		fmt.Fprintln(stderr, err)
+		return 1
+	}
+	return 0
+}

@@ -92,7 +92,7 @@ The docs repository owns the permanent `include /etc/nginx/term-llm-locations.d/
 
 Try `term-llm image cat` (or `tl image dog`, `elephant`, `rabbit`, `fox`, `owl`). These are original, **canned illustrations, not AI-generated images**. A guest-only launcher intercepts the image subcommand, saves a real PNG and displays it with Kitty graphics. Every other command invokes the unmodified native term-llm binary. Unknown animals/options fail honestly. `-o file.png`, `-o -` (raw PNG) and `--no-display` are supported; the demo does not claim the full native image command's options.
 
-Images are bundled offline in `guest/demo-images/`; rebuild with `uv run --with pillow scripts/draw-animals.py`. No image model or external image API is connected yet.
+Images are bundled offline in `guest/demo-images/`; rebuild with `uv run --with pillow scripts/draw-animals.py`. Real generation is a separate explicit opt-in, described below.
 
 ## Full-tutorial model evaluation
 
@@ -103,3 +103,59 @@ The [tutorial eval](docs/tutorial-eval.md) runs all **13 lessons** with the real
 - [Five additional models, quantization/thinking comparisons and caveats](docs/tutorial-eval-round2.md)
 
 Run the focused grading tests with `node --test tests/tutorial-eval.test.mjs`. Model evidence stays local under ignored `evidence/tutorial-eval/`; review/redact raw traces before sharing them.
+
+## Optional local image generation
+
+Open **Optional image generation** beneath the terminal. Read/accept the linked
+DeepSeek Model License and ~3 GB download consent, then select **Accept & enable
+Janus**. Nothing in the image runtime or weights is requested before this action.
+This is not an additional lesson and never enables itself from a terminal command.
+
+Once the panel says ready, return to the shell (`/quit` from chat):
+
+```sh
+term-llm image --generate "A pelican riding a bike." --seed 1 -o pelican.png
+```
+
+This guest-only extension leaves the native CLI binary unmodified. It generates a
+real 384×384 PNG, writes `pelican.png` and `pelican.png.json` (prompt, seed, model,
+revision) in the current directory, and displays it inline using wterm/Kitty.
+The optional panel also provides a preview and PNG download. Omit `--seed` to pick
+and record a random uint32 seed; omit `-o` for a unique filename. `-o -` streams raw
+PNG only (no sidecar), and `--no-display` suppresses terminal graphics. These are
+bounded tutorial options, not the full upstream CLI image provider interface.
+
+Enabling Janus terminates the text worker **before** creating the image worker.
+Text requests then fail with a switch-back instruction, rather than silently
+using Simulator. **Cancel / unload Janus** terminates loading or inference and
+retains cached downloads and saved guest files. **Reload text** terminates Janus
+before loading the originally selected text provider. Qwen and Janus are never
+kept in workers together. Browser/driver reclamation can be asynchronous; other
+tabs also consume memory. In Simulator mode, text stays honestly scripted while
+Janus images are genuine local inference. No image download is needed to use
+Simulator or the six canned illustrations.
+
+Failures return nonzero with no canned fallback. WebGPU absence/no adapter is
+reported before importing the runtime. A model load has a 15-minute deadline;
+generation has a 3-minute deadline. Retry and text reload are explicit. Ctrl+C
+interrupts the guest command; use the browser's Cancel control to stop outstanding
+GPU work too. Shut down/reload releases workers and discards the guest; download
+files first. Cancel does not delete the browser's model cache (clear site storage
+in browser settings to remove it).
+
+See [JANUS-IMAGE-GENERATION.md](JANUS-IMAGE-GENERATION.md) for pins, license
+obligations and verified browser results. Local-only browser tests (authenticated
+shared CDP proxy; only static files are intercepted; no deployment):
+
+```sh
+npm run build
+node scripts/image-generator-live.mjs                      # Simulator + real Janus
+IMAGE_TEST_QWEN=1 node scripts/image-generator-live.mjs    # real Qwen → Janus → Qwen
+node scripts/image-unsupported-live.mjs                    # controlled worker capability failures
+node scripts/stage-hosting.mjs
+IMAGE_TEST_STAGED=1 node scripts/image-generator-live.mjs # actual hashed staging output
+```
+
+These tests create/close only their own tabs and use cached pinned weights where
+available; they never change browser flags or restart services. Evidence and
+sample PNGs go under ignored `evidence/optional-janus*` directories.
