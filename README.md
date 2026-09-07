@@ -82,9 +82,11 @@ The Meet agents lesson lists built-ins, inspects shell, and invokes `tl ask @she
 
 ## Push-to-deploy
 
-Pushes to `main` run `.github/workflows/deploy.yml`: JS/Go tests, verified runtime bootstrap, browser/guest build, isolated `/learn/` deployment and public asset/hash/header smoke tests. Pull requests test and build without deploying. Deployment requires `DEPLOY_SSH_KEY`, `DEPLOY_HOST` and pinned `DEPLOY_KNOWN_HOSTS` repository secrets.
+Pushes to `main` run `.github/workflows/deploy.yml`: JS/Go tests, verified runtime bootstrap, and a browser/guest build on a runner without deployment secrets. Pull requests only test and build. The separate deployment job consumes that run's static artifact, uses the `production` environment, and runs only when `PRODUCTION_DEPLOY_ENABLED=true`. **Keep that variable unset until environment approvals and restricted SSH are verified.**
 
-The docs repository owns the permanent `include /etc/nginx/term-llm-locations.d/*.conf;` in the term-llm HTTPS vhost. This tutorial owns only `/etc/nginx/term-llm-locations.d/learn.conf`, its headers/assets under `/etc/nginx/term-llm-tutorial/`, and `/var/www/term-llm-tutorial/learn/`. Neither site's Hugo deployment owns these paths. `scripts/deploy-learn.sh` refuses deployment without the include; it never edits the parent vhost.
+Deployment credentials belong to `production` environment secrets: `DEPLOY_SSH_KEY`, `DEPLOY_HOST` (the `tutorial-deploy` account), and pinned `DEPLOY_KNOWN_HOSTS`. The upload account is restricted server-side to write-only rsync within the tutorial webroot. It cannot run arbitrary commands, delete files, write nginx configuration, or reload services.
+
+The docs repository owns the permanent `include /etc/nginx/term-llm-locations.d/*.conf;` in the term-llm HTTPS vhost. An administrator owns the tutorial route and headers under `/etc/nginx/term-llm-tutorial/`, including the static hashed-asset rules in `hosting/static-assets.conf`. Ordinary deployments change only `/var/www/term-llm-tutorial/learn/`, outside the docs site's deletion root. Build and stage before invoking `scripts/deploy-learn.sh`; it no longer builds or configures nginx. See [activation and verification](hosting/SECURITY.md).
 
 ## A small Easter egg
 
