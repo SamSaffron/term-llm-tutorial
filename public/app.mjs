@@ -1,3 +1,4 @@
+import {mountImagePanel} from './image-panel.mjs';
 import {guestWebBridge} from './guest-web.mjs';
 import {mountTutorial} from './tutorial.mjs';
 import { V86 } from './assets/libv86.mjs';
@@ -28,7 +29,7 @@ let phase='idle', bootTimer, cliSerial='', terminalLive=false;
 function controls(){$('stop').disabled=!worker&&!vm;}
 function stage(name,label){phase=name;document.body.dataset.phase=name;status(label);loadingLine($('progress'),true);}
 function resetWorker(reason){worker?.terminate();worker=null;loaded=false;for(const p of pending.values()){clearTimeout(p.timer);p.reject(Error(reason));}pending.clear();controls();}
-async function fail(kind,error){if(failing)return;failing=true;clearTimeout(bootTimer);started=false;terminalLive=false;resetWorker(kind);web.reset();await vm?.destroy();vm=null;ready=false;booting=false;phase='failed';document.body.dataset.phase=phase;$('workspace').hidden=true;$('launch').hidden=false;$('boot').disabled=false;$('boot').textContent=kind==='Stopped'?'Start again':'Try again';$('context').disabled=false;$('model').disabled=false;loadingLine($('progress'),false);status(`${kind}: ${error.message}. ${kind.includes('Model')?'Choose Simulator for a no-GPU tutorial, or use desktop Chrome with WebGPU and a smaller context. ':''}Retry starts a fresh Linux guest; guest files are lost.`);failing=false;}
+async function fail(kind,error){if(failing)return;failing=true;clearTimeout(bootTimer);started=false;terminalLive=false;resetWorker(kind);images.reset();lastImageRequest='';web.reset();await vm?.destroy();vm=null;ready=false;booting=false;phase='failed';document.body.dataset.phase=phase;$('workspace').hidden=true;$('launch').hidden=false;$('boot').disabled=false;$('boot').textContent=kind==='Stopped'?'Start again':'Try again';$('context').disabled=false;$('model').disabled=false;loadingLine($('progress'),false);status(`${kind}: ${error.message}. ${kind.includes('Model')?'Choose Simulator for a no-GPU tutorial, or use desktop Chrome with WebGPU and a smaller context. ':''}Retry starts a fresh Linux guest; guest files are lost.`);failing=false;}
 function workerCall(type,request){
  if(!worker){worker=new Worker(selectedModel==='simulator'?'simulator-worker.js':selectedModel==='qwen'?'inference-worker.js':'gemma-worker.js',{type:'module'});worker.onmessage=({data})=>{
   if(data.diagnostic){$('model-raw').textContent=JSON.stringify(data.diagnostic,null,2);return;}
@@ -37,6 +38,16 @@ function workerCall(type,request){
  };worker.onerror=e=>{resetWorker('Worker crashed: '+e.message+'; existing guest file preserved.');};}
  const id=++seq;return new Promise((resolve,reject)=>{const timer=setTimeout(()=>{resetWorker('Hard model deadline reached; existing guest file preserved. Download your checklist before restarting.');},type==='load'?600000:180000);pending.set(id,{resolve,reject,timer});worker.postMessage({id,type,request});controls();});
 }
+const images=mountImagePanel({
+ textBusy:()=>pending.size>0||textReloading,
+ suspendText:()=>{resetWorker('Text paused for Janus; reload text to continue.');$('effective').textContent=`${modelNames[selectedModel]} text paused · Janus image mode`;},
+ resumeText:async()=>{
+  textReloading=true;
+  try{const result=await workerCall('load',{context:selectedContext,backend:selectedModel});loaded=true;$('effective').textContent=selectedModel==='simulator'?'SIMULATOR · scripted responses · real terminal, files and tools':`${modelNames[selectedModel]} · ${result.precision} · ${result.context/1024}K context limit`;status('Text ready · Linux files retained');}
+  finally{textReloading=false;}
+ },textLabel:()=>modelNames[selectedModel],
+});
+let textReloading=false,lastImageRequest='';
 $('stop').onclick=()=>fail('Stopped',Error('GPU and Linux released'));
 terminal.onData(data=>{if(terminalLive)vm?.serial0_send(data);});
 $('boot').onclick=async()=>{
@@ -90,19 +101,24 @@ async function installGuest(){
 async function poll(){
  if(!ready||polling)return;polling=true;const target=vm;
  try{
+  let image;try{const bytes=await target.read_file('image-request.json');if(bytes.length<=8192)image=JSON.parse(dec.decode(bytes));}catch{}
+  if(typeof image?.id==='string'&&image.id!==lastImageRequest){
+   lastImageRequest=image.id;
+   (async()=>{let reply;try{status('Generating Janus image locally · text paused');reply={id:image.id,...await images.generate(image)};if(vm===target&&terminalLive)status('Janus PNG ready for the guest · Reload text to continue text lessons');}catch(e){reply={id:image.id,error:e.message};if(vm===target&&terminalLive){$('image-status').textContent=`Image request failed: ${e.message}`;status(`Image request failed: ${e.message}`);}}if(vm===target&&ready)await target.create_file('image-response.json',enc.encode(JSON.stringify(reply)));})().catch(e=>status(`Image bridge write failed: ${e.message}`));
+  }
   let envelope;try{const bytes=await target.read_file('request.json');if(bytes.length<=256*1024)envelope=JSON.parse(dec.decode(bytes));}catch{}
   if(envelope?.id&&envelope.id!==lastRequest){
    lastRequest=envelope.id;controls();status('Generating locally');event(`Guest HTTP request ${envelope.id}: ${envelope.request.messages?.length} messages, ${(envelope.request.tools||[]).length} tools`);
    // Keep terminal/lesson UI responsive while inference runs.
-   (async()=>{let reply;try{if(!loaded)throw Error('Model not loaded');reply={id:envelope.id,response:await workerCall('complete',envelope.request)};event(`Local inference returned ${reply.response.choices[0].finish_reason}`);status(`Response ready · local ${modelNames[selectedModel]}`);}catch(e){reply={id:envelope.id,error:e.message};status(`Inference failed: ${e.message}`);}if(vm===target&&ready){await target.create_file('response.json',enc.encode(JSON.stringify(reply)));controls();}})().catch(e=>status(`Bridge write failed: ${e.message}`));
+   (async()=>{let reply;try{if(images.blocksText)throw Error('Text paused for Janus. Use Reload text in Optional image generation.');if(!loaded)throw Error('Model not loaded');reply={id:envelope.id,response:await workerCall('complete',envelope.request)};event(`Local inference returned ${reply.response.choices[0].finish_reason}`);status(`Response ready · local ${modelNames[selectedModel]}`);}catch(e){reply={id:envelope.id,error:e.message};status(`Inference failed: ${e.message}`);}if(vm===target&&ready){await target.create_file('response.json',enc.encode(JSON.stringify(reply)));controls();}})().catch(e=>status(`Bridge write failed: ${e.message}`));
   }
  }finally{polling=false;}
 }
 setInterval(()=>poll().catch(e=>event(`Poll error: ${e.message}`)),400);
-window.addEventListener('beforeunload',()=>{web.reset();worker?.terminate();vm?.destroy();});
+window.addEventListener('beforeunload',()=>{images.reset();web.reset();worker?.terminate();vm?.destroy();});
 event(`crossOriginIsolated=${crossOriginIsolated}; SharedArrayBuffer=${typeof SharedArrayBuffer}; WebGPU=${!!navigator.gpu}`);
 // Read-only diagnostics plus genuine serial/file APIs for reproducible isolated tests.
-window.lab={get graphics(){return terminal.graphics;},get resources(){return terminal.resources;},get webResponse(){return web.lastResponse;},get vm(){return vm;},get serial(){return serial;},get ready(){return ready;},get loaded(){return loaded;},get phase(){return phase;},get started(){return started;},get screen(){return terminal.screen;},get geometry(){return {cols:terminal.cols,rows:terminal.rows};}};
+window.lab={get imageState(){return images.state;},get graphics(){return terminal.graphics;},get resources(){return terminal.resources;},get webResponse(){return web.lastResponse;},get vm(){return vm;},get serial(){return serial;},get ready(){return ready;},get loaded(){return loaded;},get phase(){return phase;},get started(){return started;},get screen(){return terminal.screen;},get geometry(){return {cols:terminal.cols,rows:terminal.rows};}};
 
 updateLaunchSettings();
 (async()=>{

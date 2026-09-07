@@ -13,7 +13,7 @@ This Git repository contains authored source, the npm lockfile, native build rec
 | wterm DOM + Ghostty core | npm0.5.0; lockfile authoritative; bundled Ghostty WASM | Apache-2.0 (`licenses/wterm-LICENSE`); Ghostty MIT (`licenses/ghostty-LICENSE`) |
 | Git |2.50.1, zlib1.3.1, Zig0.14.1 build toolchain | GPL-2.0 / zlib / MIT; exact source checksums and recipe in `scripts/build-git.sh`. Runtime bootstrap fetches corresponding Git/zlib source archives alongside binary |
 | zsh guest environment | zsh5.9-r5 Alpine packages with musl/ncurses/libcap | Notices in `licenses/`; package metadata/patches in `sources/zsh/`; complete public source bundle pinned in runtime manifest |
-| Transformers.js / ONNX Runtime | Lockfile pins; legacy experimental worker source retained | Apache-2.0 / MIT; not used by current Qwen or Simulator mode |
+| Transformers.js / ONNX Runtime | Lockfile pins; legacy experimental worker source retained | Apache-2.0 / MIT; not used by text Qwen or Simulator mode; optional Janus uses a separate exact 3.8.1 bundle |
 
 ## Public runtime bootstrap
 
@@ -28,4 +28,33 @@ This Git repository contains authored source, the npm lockfile, native build rec
 
 These three files are fetched directly by the visiting browser, never committed or redistributed by the tutorial host. Do not add cached copies to Git or the staging allowlist without resolving their corresponding-source obligations. Generic upstream Linux/Buildroot links are not proof of the exact image's complete corresponding source.
 
-Simulator mode uses no model weights or inference runtime. Both modes still run the real guest operating system and CLI. All third-party license terms remain applicable even while this repository is private.
+Simulator text uses no model weights or inference runtime. The separate optional Janus image feature downloads its own weights only after explicit consent, including when text uses Simulator. Both modes still run the real guest operating system and CLI. All third-party license terms remain applicable even while this repository is private.
+
+
+## Optional Janus images
+
+Model: `onnx-community/Janus-Pro-1B-ONNX` at immutable revision
+`04efdf2e36cb07a034b0d94f7322356b292f0418`; the six exact ONNX artifacts,
+byte counts and LFS SHA-256s are listed in `JANUS-IMAGE-GENERATION.md`.
+Upstream model card: `deepseek-ai/Janus-Pro-1B` at
+`960ab33191f61342a4c60ae74d8dc356a39fafcb`. The card's License section explicitly
+subjects the model to the DeepSeek Model License despite conflicting MIT metadata.
+The authoritative full agreement is copied, unchanged, from
+https://github.com/deepseek-ai/Janus/blob/1daa72fa409002d40931bd7b36a9280362469ead/LICENSE-MODEL
+to `licenses/Janus-LICENSE-MODEL.txt`, shipped and linked at opt-in. It allows
+commercial use and distribution subject to conditions, **not unrestricted MIT
+weight use**. We do not modify the ONNX weights. The conversion/quantization is
+upstream's. §§4–6, Attachment A and output responsibilities apply to downstream
+users; acceptance is required before the model can be enabled.
+
+The npm alias `transformers-image` pins Transformers.js **3.8.1** separately from
+the existing text experiment dependency. The build copies its self-contained
+`dist/transformers.min.js` and matching `ort-wasm-simd-threaded.jsep.{mjs,wasm}`.
+These are imported lazily by the dedicated image worker. Transformers.js is
+Apache-2.0 (`licenses/transformers-js-LICENSE`); matching ONNX Runtime Web is
+`1.22.0-dev.20250409-89f8206ba4`, MIT (`licenses/onnxruntime-web-LICENSE`).
+The implementation follows the Janus Transformers.js processor/generate_images
+API demonstrated by https://huggingface.co/spaces/webml-community/Janus-Pro-WebGPU
+and the separately verified browser harness; it adds guest transport, consent,
+fixed q4/fp32 sessions, worker-local seeds and termination-based cancellation.
+No hosted image inference API or model weight mirror is provided.

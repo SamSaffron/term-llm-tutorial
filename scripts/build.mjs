@@ -15,3 +15,10 @@ execFileSync('go',['build','-trimpath','-ldflags=-s -w','-o','../public/assets/p
 console.log('Browser bundles built; guest binaries built separately by scripts/build-guest.sh');
 
 await copyFile('node_modules/@wterm/dom/src/terminal.css','public/assets/wterm.css');
+
+// Janus uses the proven 3.8.1 self-contained bundle, NOT transformers.web.js.
+await build({entryPoints:['public/image-worker.mjs'],outfile:'public/image-worker.js',bundle:true,format:'esm',minify:true,external:['./image-runtime/transformers.min.js']});
+await mkdir('public/image-runtime',{recursive:true});
+for(const name of ['transformers.min.js','ort-wasm-simd-threaded.jsep.mjs','ort-wasm-simd-threaded.jsep.wasm'])await copyFile(`node_modules/transformers-image/dist/${name}`,`public/image-runtime/${name}`);
+await mkdir('public/licenses',{recursive:true});
+await copyFile('licenses/Janus-LICENSE-MODEL.txt','public/licenses/Janus-LICENSE-MODEL.txt');

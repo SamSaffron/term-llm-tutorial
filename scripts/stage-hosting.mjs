@@ -15,6 +15,9 @@ console.log('Staged explicit public runtime allowlist; no firmware, model, evide
 await mkdir(`${root}/ort`,{recursive:true});
 for(const suffix of ['mjs','wasm','jsep.mjs','jsep.wasm','asyncify.mjs','asyncify.wasm'])await copyFile(`public/ort/ort-wasm-simd-threaded.${suffix}`,`${root}/ort/ort-wasm-simd-threaded.${suffix}`);
 
+await copyFile('public/image-worker.js',`${root}/image-worker.js`);
+await mkdir(`${root}/image-runtime`,{recursive:true});
+for(const name of ['transformers.min.js','ort-wasm-simd-threaded.jsep.mjs','ort-wasm-simd-threaded.jsep.wasm'])await copyFile(`public/image-runtime/${name}`,`${root}/image-runtime/${name}`);
 await import('./stage-cdn.mjs');
 
 await mkdir(`${root}/sources/picnic-mcp`,{recursive:true});

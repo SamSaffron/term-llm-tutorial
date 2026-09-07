@@ -26,7 +26,7 @@ func demoAnimal(prompt string) (string, error) {
 		}
 	}
 	if found == "" {
-		return "", fmt.Errorf("this canned demo knows cat, dog, elephant, rabbit, fox and owl; no image model is connected yet")
+		return "", fmt.Errorf("this canned demo knows cat, dog, elephant, rabbit, fox and owl; use image --generate for optional real Janus generation")
 	}
 	return found, nil
 }
@@ -61,6 +61,11 @@ func writeKittyPNG(w io.Writer, data []byte) error {
 	return err
 }
 func runImageDemo(args []string, stdout, stderr *os.File) int {
+	for _, arg := range args {
+		if arg == "--generate" {
+			return runImageGenerate(args, stdout, stderr)
+		}
+	}
 	output := ""
 	display := true
 	var words []string
@@ -68,7 +73,7 @@ func runImageDemo(args []string, stdout, stderr *os.File) int {
 		a := args[i]
 		switch {
 		case a == "--help" || a == "-h":
-			fmt.Fprintln(stdout, "Tutorial image Easter egg (canned illustrations, NOT AI generation)\nUsage: term-llm image <cat|dog|elephant|rabbit|fox|owl> [-o file.png|-] [--no-display]")
+			fmt.Fprintln(stdout, "Tutorial image Easter egg (canned illustrations, NOT AI generation)\nUsage: term-llm image <cat|dog|elephant|rabbit|fox|owl> [-o file.png|-] [--no-display]\nReal opt-in: term-llm image --generate \"prompt\" [--seed 1] [-o file.png|-] [--no-display]\nEnable Optional image generation in the browser first (~3 GB; releases text model).")
 			return 0
 		case a == "--no-display":
 			display = false
