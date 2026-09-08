@@ -47,3 +47,5 @@ public/licenses/
 .native-cli/
 public/assets/term-llm.build
 public/assets/term-llm.tmp
+
+.wterm/

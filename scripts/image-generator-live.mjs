@@ -18,6 +18,7 @@ assert.ok(!(qwen&&bonsai),'Select only one real text model');
 const model=bonsai?'bonsai':qwen?'qwen':'simulator',textPattern=bonsai?/Bonsai 8B Q1/:qwen?/Qwen3 8B/:/SIMULATOR/;
 const dir='evidence/optional-janus'+(imagesFirst?'-launch':'')+(bonsai?'-bonsai':qwen?'-qwen':'')+(staged?'-staged':'');await fs.mkdir(dir,{recursive:true});
 const b=await connect(),p=await b.contexts()[0].newPage();
+console.log('TARGET',(await (await p.context().newCDPSession(p)).send('Target.getTargetInfo')).targetInfo.targetId);
 const origin=process.env.IMAGE_TEST_ORIGIN||'https://term-llm.com';
 const requests=[],events=[],errors=[];let opted=false;
 const log=(type,data)=>{console.log(JSON.stringify({type,data}));};
@@ -39,9 +40,17 @@ await p.addInitScript(()=>{
  };
 });
 async function shell(command,tag,code='0'){
+ console.log('COMMAND',tag);
  await sendCLI(p,`${command}; printf '\\nIMAGE_${tag}_DONE:%s\\n' "$?"`);
  await p.waitForFunction(t=>lab.serial.includes('\r\nIMAGE_'+t+'_DONE:'),tag,{timeout:200000});
  const serial=await p.evaluate(()=>lab.serial);assert.ok(serial.includes('\r\nIMAGE_'+tag+'_DONE:'+code),serial.slice(-3000));return serial;
+}
+async function inlinePixels(){
+ await p.waitForFunction(()=>lab.graphics?.placements.some(p=>p.virtual)&&[...document.querySelectorAll('#terminal canvas.term-image')].some(c=>{const r=c.getBoundingClientRect(),t=document.querySelector('#terminal').getBoundingClientRect();return r.bottom>t.top&&r.top<t.bottom&&r.width>20;}));
+ const result=await p.evaluate(()=>({graphics:lab.graphics,canvases:[...document.querySelectorAll('#terminal canvas.term-image')].map(c=>({width:c.width,height:c.height,colors:new Set(c.getContext('2d').getImageData(0,0,c.width,c.height).data).size}))}));
+ assert.ok(result.canvases.some(c=>c.width>20&&c.height>20&&c.colors>20),'actual image pixels must be painted in terminal');
+ assert.equal(await p.locator('#image-start-guide,#image-result,#image-preview').count(),0);
+ return result;
 }
 try{
  await p.setViewportSize({width:1440,height:1000});await p.goto(origin+'/learn/');
@@ -76,23 +85,33 @@ try{
  await shell('cmp /tmp/term-llm /mnt/term-llm','stock-binary');
  assert.match(await shell('term-llm image --help','native-help'),/configured openai_compatible/);
  await p.locator('.lesson-nav button').last().click();
+ await p.evaluate(()=>{window.inlineRaw=[];lab.vm.add_listener('serial0-output-byte',byte=>inlineRaw.push(byte));});
  const lesson=await p.locator('#lesson .lesson-count').textContent();
  if(demoOnly){
   await shell('term-llm image cat --no-clipboard -o demo.png','plain-demo');
   const bytes=Buffer.from(await p.evaluate(async()=>Array.from(await lab.vm.read_file('workspace/demo.png'))));
   assert.deepEqual(bytes,await fs.readFile('guest/demo-images/cat.png'));
   assert.match(await shell('term-llm config get image.provider','demo-selected'),/demo/);
-  await p.waitForFunction(()=>document.querySelector('#image-preview').naturalWidth===256);
-  assert.match(await p.locator('#image-caption').textContent(),/Demo · canned/);
+  await inlinePixels();
   assert.deepEqual(imageRequests(),[]);assert.equal(await p.evaluate(()=>lab.imageState),'off');
-  await p.screenshot({path:dir+'/native-demo.png',fullPage:true});
+  await shell('term-llm image dog --no-clipboard -o dog.png','second-inline');
+  await inlinePixels();
+  const ids=await p.evaluate(()=>lab.graphics.images.map(i=>i.imageId));assert.equal(ids.length,2);
+  await fs.writeFile(dir+'/pre-resize.json',JSON.stringify(await p.evaluate(()=>({raw:inlineRaw,geometry:lab.geometry,graphics:lab.graphics}))));
+await p.setViewportSize({width:1100,height:900});await p.waitForTimeout(600);await inlinePixels();
+  await shell("printf '\\n%.0s' {1..90}",'scroll');
+  assert.deepEqual(await p.evaluate(()=>lab.graphics.images.map(i=>i.imageId)),ids);
+  await p.locator('#terminal').evaluate(el=>{const first=lab.graphics.placements.find(p=>p.virtual);el.scrollTop=first.row*el.querySelector('.term-row').getBoundingClientRect().height;});
+  await p.waitForTimeout(300);await inlinePixels();
+  await p.screenshot({path:dir+'/native-demo-scrollback.png',fullPage:true});
+  await p.setViewportSize({width:1440,height:1000});
+
   await p.locator('#stop').click();await p.waitForFunction(()=>lab.vm===null);
   log('passed',{plainDemoProvider:true,noJanusDownloads:true,nativeSavedPNG:true});
  }else{
 
  if(imagesFirst){
   assert.deepEqual(textRequests(),[],'images-first must not request Qwen or Simulator');
-  assert.equal(await p.locator('#image-start-guide').isVisible(),true);
   assert.equal(await p.locator('#image-panel').getAttribute('open')!==null,true);
   assert.equal(await p.locator('#image-consent').isChecked(),false);
   assert.equal(await p.locator('#image-enable').isDisabled(),true);
@@ -130,12 +149,9 @@ try{
  const start=Date.now();await shell('term-llm image "A cat riding a bicycle." --no-clipboard -o generated-cat.png','generated');
  const bytes=Buffer.from(await p.evaluate(async()=>Array.from(await lab.vm.read_file('workspace/generated-cat.png'))));
  await fs.writeFile(dir+'/generated-cat.png',bytes);
- assert.equal(await p.locator('#image-result').isVisible(),true);
- assert.equal(await p.locator('#image-preview').evaluate(img=>img.complete&&img.naturalWidth===384),true);
- const download=await p.locator('#image-download').getAttribute('href');
- assert.deepEqual(Buffer.from(download.split(',')[1],'base64'),bytes);
- const metadata={caption:await p.locator('#image-caption').textContent(),provider:await shell('term-llm config get image.provider','selected-provider')};
- assert.match(metadata.caption,/A cat riding a bicycle/);assert.match(metadata.provider,/janus/);
+ const terminalImage=await inlinePixels();
+ const providerOutput=await shell('term-llm config get image.provider','selected-provider');assert.match(providerOutput,/janus/);
+ const metadata={terminalImage,provider:'janus'};
  const demo=await fs.readFile('guest/demo-images/cat.png');assert.notDeepEqual(bytes,demo);
  log('generated',{seconds:(Date.now()-start)/1000,bytes:bytes.length,sha256:createHash('sha256').update(bytes).digest('hex'),metadata});
  await fs.writeFile(dir+'/generated.json',JSON.stringify({metadata,seconds:(Date.now()-start)/1000,sha256:createHash('sha256').update(bytes).digest('hex')},null,2));
@@ -166,7 +182,7 @@ try{
  assert.equal(await p.locator('#boot').isDisabled(),false);
  assert.deepEqual(requests.filter(r=>!r.opted&&/image-worker|image-runtime|Janus/.test(r.url)),[]);
  assert.equal(await p.evaluate(()=>imageTestOverlap),false,'text and image workers must never be resident together');
- log('passed',{noImageDownloadsBeforeConsent:true,realNativePNGInGuestAndPreview:true,nativeProviderOnly:true,textRestored:true,cancelAndShutdownReleaseWorkers:true});
+ log('passed',{noImageDownloadsBeforeConsent:true,realNativePNGInGuestAndTerminal:true,nativeProviderOnly:true,textRestored:true,cancelAndShutdownReleaseWorkers:true});
  await fs.writeFile(dir+'/proof.json',JSON.stringify({requests,events,errors,passed:true},null,2));
  }
 }

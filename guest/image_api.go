@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 )
@@ -66,12 +64,6 @@ func (b *bridge) images(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		fail(503, err)
 		return
-	}
-	if r.URL.Path == "/images/demo/v1/images/generations" {
-		event, _ := json.Marshal(map[string]string{"id": fmt.Sprint(time.Now().UnixNano()), "model": "demo", "prompt": in.Prompt, "png": base64.StdEncoding.EncodeToString(data)})
-		if os.WriteFile(filepath.Join(b.dir, "image-demo-result.tmp"), event, 0600) == nil {
-			os.Rename(filepath.Join(b.dir, "image-demo-result.tmp"), filepath.Join(b.dir, "image-demo-result.json"))
-		}
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{"data": []map[string]string{{"b64_json": base64.StdEncoding.EncodeToString(data)}}})

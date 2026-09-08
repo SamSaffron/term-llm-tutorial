@@ -10,4 +10,4 @@
 
 #image-panel{grid-column:1/-1;padding:1rem;border:1px solid var(--border,#344052);margin:1rem 0}#image-panel p,#image-panel label{line-height:1.5}#image-panel label{display:block}#image-panel input{width:auto}#image-panel pre{overflow:auto;white-space:pre-wrap}#image-panel img{max-width:100%;height:auto}#image-panel a{color:inherit;text-decoration:underline}.image-actions{display:flex;flex-wrap:wrap;gap:.6rem;margin-top:1rem}
 
-.launch-selects{display:flex;gap:12px;flex-wrap:wrap}.launch-selects>div:first-child{flex:2;min-width:240px}.launch-selects>div:last-child{flex:1;min-width:140px}#image-start-guide{padding:22px 24px;border-bottom:1px solid #294034;line-height:1.6}#image-start-guide p{font-size:13px;color:#b0c5bb}#image-start-guide:not([hidden]) + #lesson{height:auto;max-height:none}#guide-pane:has(#image-start-guide:not([hidden])){max-height:calc(100dvh - 158px);overflow:auto}
+.launch-selects{display:flex;gap:12px;flex-wrap:wrap}.launch-selects>div:first-child{flex:2;min-width:240px}.launch-selects>div:last-child{flex:1;min-width:140px}

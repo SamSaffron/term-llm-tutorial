@@ -3,9 +3,10 @@ import {GhosttyCore} from '@wterm/ghostty';
 
 export async function createTerminal(element){
  const core=await GhosttyCore.load({wasmPath:'assets/ghostty-vt.wasm',scrollbackLimit:2*1024*1024,backgroundColor:'#060a10',foregroundColor:'#e5edf6',imageStorageLimit:32*1024*1024});
- const term=new WTerm(element,{core,cols:90,rows:26,autoResize:true,cursorBlink:false});
+ // app.fit owns geometry and the guest TTY size; do not race a second observer.
+ const term=new WTerm(element,{core,cols:90,rows:26,autoResize:false,cursorBlink:false});
  // wterm measures cell pixels during init. A display:none ancestor prevents
- // its resize observer and Kitty pixel geometry from being initialized.
+ // its cell measurements and Kitty pixel geometry from being initialized.
  const hidden=element.closest('[hidden]'),visibility=hidden?.style.visibility;
  if(hidden){hidden.style.visibility='hidden';hidden.hidden=false;}
  try{await term.init();}finally{if(hidden){hidden.hidden=true;hidden.style.visibility=visibility;}}

@@ -62,3 +62,10 @@ test('guest runtime uses stock CLI without obsolete artifact agent or preview wa
  assert.match(build,/status --porcelain/);
  assert.match(await readFile('public/terminal.mjs','utf8'),/wasmPath:'assets\/ghostty-vt.wasm'/);
 });
+
+test('image commands use native inline Kitty output, never a sidebar image surface',async()=>{
+ const html=await readFile('public/index.html','utf8'),app=await readFile('public/app.mjs','utf8'),panel=await readFile('public/image-panel.mjs','utf8');
+ assert.doesNotMatch(html+app+panel,/image-start-guide|image-preview|image-result|image-download|images\.preview/);
+ assert.match(await readFile('public/boot.sh','utf8'),/TERM=xterm-kitty/);
+ assert.match(await readFile('scripts/build.mjs','utf8'),/build-wterm\.sh/);
+});

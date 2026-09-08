@@ -2,7 +2,7 @@ import {ImageGenerator} from './image-generator.mjs';
 export function mountImagePanel({textBusy,suspendText,resumeText,textLabel,selectProvider}) {
  const $=id=>document.getElementById(id);
  let switching=false,paused=false,reloadingText=false,epoch=0;
- const say=text=>{$('image-status').textContent=text;$('image-start-status').textContent=text;};
+ const say=text=>{$('image-status').textContent=text;};
  const controls=()=>{
   $('image-enable').disabled=switching||images.state!=='off'||!$('image-consent').checked;
   $('image-cancel').disabled=reloadingText||(!switching&&images.state==='off');
@@ -42,16 +42,9 @@ export function mountImagePanel({textBusy,suspendText,resumeText,textLabel,selec
   catch(e){if(current===epoch)say(`Text reload failed: ${e.message}. Retry Reload text, or shut down and choose Simulator.`);}
   finally{if(current===epoch){switching=false;reloadingText=false;controls();}}
  };
- function preview(result,png){
-  $('image-example').textContent=result.model==='demo'?'term-llm image cat -o cat.png':'term-llm image "A pelican riding a bike." -o pelican.png';
-  $('image-preview').src=png;$('image-result').hidden=false;
-  $('image-caption').textContent=result.model==='demo'?`Demo · canned drawing · ${result.prompt}`:`Janus-Pro-1B · seed ${result.seed} · ${result.prompt}`;
-  $('image-download').href=png;$('image-download').download=result.model==='demo'?'demo.png':`janus-${result.seed}.png`;
-  $('image-start-guide').hidden=false;$('image-start-guide').append($('image-result'));
- }
  controls();
  return {
-  enable,preview,
+  enable,
   prepare(){paused=true;$('image-panel').open=true;controls();say('Janus selected · accept and enable below, or Reload text.');},
   get state(){return images.state;},
   get blocksText(){return paused||switching||images.state!=='off';},
@@ -60,10 +53,9 @@ export function mountImagePanel({textBusy,suspendText,resumeText,textLabel,selec
    const result=await images.generate(request);
    const png=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=reject;reader.readAsDataURL(result.blob);});
    if(current!==epoch)throw Error('Image operation canceled; result discarded.');
-   preview(result,png);
-   say('PNG ready. The native CLI saves it; preview and download are shown above.');
+   say('Image generated · returning it to the terminal.');
    const {blob,...metadata}=result;return {...metadata,png:png.split(',')[1]};
   },
-  reset(){++epoch;images.reset();switching=false;reloadingText=false;paused=false;$('image-consent').checked=false;$('image-preview').removeAttribute('src');$('image-download').removeAttribute('href');$('image-result').hidden=true;controls();say('Off · no image downloads until you accept and enable.');},
+  reset(){++epoch;images.reset();switching=false;reloadingText=false;paused=false;$('image-consent').checked=false;controls();say('Off · no image downloads until you accept and enable.');},
  };
 }
