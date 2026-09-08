@@ -94,11 +94,13 @@ async function loadAndStart(){
  $('effective').textContent=`${selectedModel==='simulator'?'SIMULATOR · scripted text':modelNames[selectedModel]} · images: ${selectedImageSupport==='janus'?'Janus':selectedImageSupport==='demo'?'Demo (canned)':'off'}`;
  terminal.reset();terminalLive=true;cliSerial='';started=true;phase='ready';document.body.dataset.phase=phase;loadingLine($('progress'),false);$('launch').hidden=true;$('workspace').hidden=false;status('Linux shell · start with the lesson on the right');controls();resizeTerminal();vm.serial0_send('\n');terminal.focus();
 }
-let resizeTimer;function resizeTerminal(){clearTimeout(resizeTimer);resizeTimer=setTimeout(async()=>{const container=$('terminal');if(container.clientWidth<40||container.clientHeight<40)return;
- // Reserve the actual header/status/tab rows, including wrapping at browser zoom.
- // Document coordinates keep this stable when the user scrolls to diagnostics.
- const top=container.getBoundingClientRect().top+window.scrollY;
- container.style.maxHeight=`${Math.max(160,(window.visualViewport?.height||innerHeight)-top-16)}px`;
+let resizeTimer;function resizeTerminal(){clearTimeout(resizeTimer);resizeTimer=setTimeout(async()=>{const container=$('terminal');const visiblePane=$('chat-pane').getBoundingClientRect().width?$('chat-pane'):$('guide-pane');if(visiblePane.clientWidth<40)return;
+ // Bound the whole pane, not just its terminal child. Reserve breathing room
+ // for the hint/diagnostics, and keep the tutorial alongside at equal height.
+ const pane=visiblePane.getBoundingClientRect();
+ const top=pane.top+window.scrollY;
+ $('workspace').style.setProperty('--pane-height',`${Math.max(200,Math.min(760,(window.visualViewport?.height||innerHeight)-top-96))}px`);
+ if(container.clientWidth<40||container.clientHeight<40)return;
  fit.fit();const cols=Math.min(240,Math.max(2,terminal.cols)),rows=Math.min(80,Math.max(1,terminal.rows));terminal.resize(cols,rows);if(vm&&ready)try{await vm.create_file('geometry.json',enc.encode(JSON.stringify({cols,rows})));}catch{}},80);}
 const layoutObserver=new ResizeObserver(resizeTerminal);
 for(const element of [$('terminal'),document.querySelector('.workspace-bar'),document.querySelector('.tabs'),document.querySelector('#chat-pane h2')])layoutObserver.observe(element);

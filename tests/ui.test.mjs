@@ -76,3 +76,17 @@ test('Janus consent is boot-only and workspace has no model switching controls',
  assert.doesNotMatch(html+app,/image-panel|image-enable|image-text|image-cancel|Reload text|setImageProvider/);
  assert.ok(app.indexOf("await confirmJanus")<app.indexOf("await fetchBootAssets"));
 });
+
+test('workspace owns pane height and terminal fills its flex pane despite wterm inline height',async()=>{
+ const css=await readFile('public/app.css','utf8'),app=await readFile('public/app.mjs','utf8');
+ assert.match(css,/#terminal\.wterm\{flex:1 1 0;height:0!important;min-height:0;max-height:none\}/);
+ assert.match(css,/grid-template-columns:minmax\(0,1\.4fr\) minmax\(340px,1fr\)/);
+ assert.match(app,/Math\.min\(760/);assert.match(app,/--pane-height/);
+ assert.doesNotMatch(app,/container\.style\.maxHeight/);
+});
+test('Kitty graphics name has real bundled text terminfo before zsh starts',async()=>{
+ const boot=await readFile('public/boot.sh','utf8');
+ assert.match(boot,/TERM=xterm-kitty/);
+ assert.match(boot,/ln -sf xterm-256color \/opt\/zsh\/etc\/terminfo\/x\/xterm-kitty/);
+ assert.ok(boot.indexOf('export TERMINFO=')<boot.indexOf('exec /tmp/zsh -i'));
+});

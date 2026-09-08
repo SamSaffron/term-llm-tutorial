@@ -158,3 +158,6 @@ IMAGE_TEST_BONSAI=1 IMAGE_TEST_CONTEXT=4096 IMAGE_TEST_STAGED=1 node scripts/ima
 
 Browser tests use the authenticated shared browser, local static routing and real
 inference. They do not deploy or change browser flags. Evidence stays ignored.
+
+Terminal pane sizing and Backspace/line-editing behavior are documented and
+browser-tested in [docs/terminal-input.md](docs/terminal-input.md).
