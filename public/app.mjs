@@ -1,5 +1,7 @@
-import {mountLaunchChoice,startProvider} from './launch-choice.mjs';
-import {mountImagePanel} from './image-panel.mjs';
+import {mountLaunchChoice} from './launch-choice.mjs';
+import {ImageGenerator} from './image-generator.mjs';
+import {SessionModels} from './session-models.mjs';
+import {confirmJanus} from './janus-consent.mjs';
 import {guestWebBridge} from './guest-web.mjs';
 import {mountTutorial} from './tutorial.mjs';
 import { V86 } from './assets/libv86.mjs';
@@ -30,43 +32,44 @@ let phase='idle', bootTimer, cliSerial='', terminalLive=false;
 function controls(){$('stop').disabled=!worker&&!vm;}
 function stage(name,label){phase=name;document.body.dataset.phase=name;status(label);loadingLine($('progress'),true);}
 function resetWorker(reason){worker?.terminate();worker=null;loaded=false;for(const p of pending.values()){clearTimeout(p.timer);p.reject(Error(reason));}pending.clear();controls();}
-async function fail(kind,error){if(failing)return;failing=true;clearTimeout(bootTimer);started=false;terminalLive=false;resetWorker(kind);images.reset();lastImageRequest='';web.reset();await vm?.destroy();vm=null;ready=false;booting=false;phase='failed';document.body.dataset.phase=phase;$('workspace').hidden=true;$('launch').hidden=false;$('boot').disabled=false;$('boot').textContent=kind==='Stopped'?'Start again':'Try again';$('context').disabled=false;$('model').disabled=false;launchChoice.reset();loadingLine($('progress'),false);status(`${kind}: ${error.message}. ${kind.includes('Model')?'Choose Simulator for a no-GPU tutorial, or use desktop Chrome with WebGPU and a smaller context. ':''}Retry starts a fresh Linux guest; guest files are lost.`);failing=false;}
+async function fail(kind,error){if(failing)return;failing=true;clearTimeout(bootTimer);started=false;terminalLive=false;models.reset();janusConsent=false;lastImageRequest='';web.reset();await vm?.destroy();vm=null;ready=false;booting=false;phase='failed';document.body.dataset.phase=phase;$('workspace').hidden=true;$('launch').hidden=false;$('boot').disabled=false;$('boot').textContent=kind==='Stopped'?'Start again':'Try again';$('context').disabled=false;$('model').disabled=false;launchChoice.reset();loadingLine($('progress'),false);status(`${kind}: ${error.message}. ${kind.includes('Model')?'Choose Simulator for a no-GPU tutorial, or use desktop Chrome with WebGPU and a smaller context. ':''}Retry starts a fresh Linux guest; guest files are lost.`);failing=false;}
 function workerCall(type,request){
  if(!worker){worker=new Worker(selectedModel==='simulator'?'simulator-worker.js':selectedModel==='qwen'?'inference-worker.js':selectedModel==='bonsai'?'bonsai-worker.js':'gemma-worker.js',{type:'module'});worker.onmessage=({data})=>{
   if(data.fatal){resetWorker(data.fatal);$('effective').textContent=`${modelNames[selectedModel]} unavailable · GPU device lost`;status(data.fatal);return;}
   if(data.diagnostic){$('model-raw').textContent=JSON.stringify(data.diagnostic,null,2);return;}
-  if(data.progress){if(phase==='model'||textReloading){status(data.progress.text);loadingLine($('progress'),true,data.progress.progress);}return;}
+  if(data.progress){if(phase==='model'||started){status(data.progress.text);loadingLine($('progress'),true,data.progress.progress);}return;}
   const p=pending.get(data.id);if(!p)return;clearTimeout(p.timer);pending.delete(data.id);data.error?p.reject(Error(data.error)):p.resolve(data.result);
  };worker.onerror=e=>{resetWorker('Worker crashed: '+e.message+'; existing guest file preserved.');};}
  const id=++seq;return new Promise((resolve,reject)=>{const timer=setTimeout(()=>{resetWorker('Hard model deadline reached; existing guest file preserved. Download your checklist before restarting.');},type==='load'?600000:180000);pending.set(id,{resolve,reject,timer});worker.postMessage({id,type,request});controls();});
 }
-async function setImageProvider(provider){
- const target=vm;if(!target||!ready)throw Error('Start the tutorial first');
- const id=crypto.randomUUID();
- await target.create_file('image-provider.json',enc.encode(JSON.stringify({id,provider})));
- const deadline=Date.now()+45000;
- while(vm===target&&Date.now()<deadline){
-  let result;try{result=JSON.parse(dec.decode(await target.read_file('image-provider-status.json')));}catch{}
-  if(result?.id===id){if(result.error)throw Error(result.error);return;}
-  await new Promise(r=>setTimeout(r,100));
- }
- throw Error('Image provider configuration timed out');
-}
-const images=mountImagePanel({
- textBusy:()=>pending.size>0||textReloading,
- suspendText:()=>{resetWorker('Text paused for Janus; reload text to continue.');$('effective').textContent=`${modelNames[selectedModel]} text paused · Janus image mode`;},
- resumeText:async()=>{
-  textReloading=true;
-  try{const result=await workerCall('load',{context:selectedContext,backend:selectedModel});loaded=true;$('allocation').textContent=JSON.stringify(result,null,2);$('effective').textContent=selectedModel==='simulator'?'SIMULATOR · scripted responses · real terminal, files and tools':`${modelNames[selectedModel]} · ${result.precision} · ${result.context/1024}K context limit`;status('Text ready · Linux files retained');}
-  finally{textReloading=false;loadingLine($('progress'),false);}
- },textLabel:()=>modelNames[selectedModel],selectProvider:setImageProvider,
+let janusConsent=false,lastImageRequest='';
+const images=new ImageGenerator({progress:p=>{
+ if(p.status==='progress'||p.status==='initiate')status(`Loading Janus · ${p.file}`);
+}});
+const models=new SessionModels({
+ text:{ready:()=>loaded,unload:()=>resetWorker('Model released'),load:async()=>{
+  status(`Loading ${modelNames[selectedModel]}`);
+  try{const result=await workerCall('load',{context:selectedContext,backend:selectedModel});loaded=true;
+   $('allocation').textContent=JSON.stringify(result,null,2);
+  }finally{loadingLine($('progress'),false);}
+ }},
+ images:{ready:()=>images.state==='ready',unload:()=>images.reset(),load:async()=>{
+  if(selectedImageSupport!=='janus'||!janusConsent)throw Error('Janus was not selected and accepted at boot');
+  status('Loading Janus · cached weights used when available');await images.load(true);
+ }},
 });
-let textReloading=false,lastImageRequest='';
 const launchChoice=mountLaunchChoice($);
 $('stop').onclick=()=>fail('Stopped',Error('GPU and Linux released'));
 terminal.onData(data=>{if(terminalLive)vm?.serial0_send(data);});
 $('boot').onclick=async()=>{
- if(!launchChoice.allowed)return;selectedImageSupport=launchChoice.imageSupport;launchChoice.start();$('launch-settings').open=false;window.scrollTo({top:0,behavior:'instant'});booting=true;$('context').disabled=true;$('model').disabled=true;$('boot').disabled=true;serial='';cliSerial='';lastRequest='';tutorial.reset();web.reset();$('model-raw').textContent='';selectedContext=Number($('context').value);selectedModel=$('model').value;terminal.reset();
+ if(!launchChoice.allowed)return;
+ selectedImageSupport=launchChoice.imageSupport;selectedModel=$('model').value;selectedContext=Number($('context').value);
+ launchChoice.start();booting=true;$('context').disabled=true;$('model').disabled=true;
+ if(selectedImageSupport==='janus'){
+  janusConsent=await confirmJanus($('janus-consent'));
+  if(!janusConsent){booting=false;$('model').disabled=false;launchChoice.reset();updateLaunchSettings();return;}
+ }
+ $('launch-settings').open=false;window.scrollTo({top:0,behavior:'instant'});serial='';cliSerial='';lastRequest='';tutorial.reset();web.reset();$('model-raw').textContent='';terminal.reset();
  stage('assets','Checking Linux assets · downloading and verifying SHA-256');
  try{
  const bootAssets=await fetchBootAssets();
@@ -86,14 +89,10 @@ $('boot').onclick=async()=>{
  }catch(e){await fail('Linux assets failed',e);}
 };
 async function loadAndStart(){
- try{await startProvider(selectedImageSupport,{startText:async()=>{
-  stage('model',selectedModel==='simulator'?'Starting simulator · no model download':`Loading ${modelNames[selectedModel]} · checking local WebGPU`);
-  const result=await workerCall('load',{context:selectedContext,backend:selectedModel});loaded=true;$('allocation').textContent=JSON.stringify(result,null,2);$('effective').textContent=selectedModel==='simulator'?'SIMULATOR · scripted responses · real terminal, files and tools':`${modelNames[selectedModel]} · ${result.precision} · ${result.context/1024}K context limit`;$('allocation').textContent=JSON.stringify(result,null,2);
- },prepareImages:async()=>{
-  images.prepare(); // No model load: consent stays in the existing panel.
- } });}catch(e){await fail('Model unavailable',e);return;}
- terminal.reset();terminalLive=true;cliSerial='';started=true;phase='ready';document.body.dataset.phase=phase;loadingLine($('progress'),false);$('launch').hidden=true;$('workspace').hidden=false;status(selectedImageSupport==='janus'?'Linux shell · enable Janus below':'Linux shell · start with the lesson on the right');controls();resizeTerminal();vm.serial0_send('\n');terminal.focus();
- if(selectedImageSupport==='janus')$('image-panel').scrollIntoView({behavior:'instant'});
+ try{stage('model','Loading selected models');await models.run(selectedImageSupport==='janus'?'images':'text',async()=>{});}
+ catch(e){await fail('Model unavailable',e);return;}
+ $('effective').textContent=`${selectedModel==='simulator'?'SIMULATOR · scripted text':modelNames[selectedModel]} · images: ${selectedImageSupport==='janus'?'Janus':selectedImageSupport==='demo'?'Demo (canned)':'off'}`;
+ terminal.reset();terminalLive=true;cliSerial='';started=true;phase='ready';document.body.dataset.phase=phase;loadingLine($('progress'),false);$('launch').hidden=true;$('workspace').hidden=false;status('Linux shell · start with the lesson on the right');controls();resizeTerminal();vm.serial0_send('\n');terminal.focus();
 }
 let resizeTimer;function resizeTerminal(){clearTimeout(resizeTimer);resizeTimer=setTimeout(async()=>{const container=$('terminal');if(container.clientWidth<40||container.clientHeight<40)return;
  // Reserve the actual header/status/tab rows, including wrapping at browser zoom.
@@ -124,18 +123,18 @@ async function poll(){
   let image;try{const bytes=await target.read_file('image-request.json');if(bytes.length<=8192)image=JSON.parse(dec.decode(bytes));}catch{}
   if(typeof image?.id==='string'&&image.id!==lastImageRequest){
    lastImageRequest=image.id;
-   (async()=>{let reply;try{status('Generating Janus image locally · text paused');reply={id:image.id,...await images.generate(image)};if(vm===target&&terminalLive)status('Janus PNG ready for the guest · Reload text to continue text lessons');}catch(e){reply={id:image.id,error:e.message};if(vm===target&&terminalLive){$('image-status').textContent=`Image request failed: ${e.message}`;status(`Image request failed: ${e.message}`);}}if(vm===target&&ready)await target.create_file('image-response.json',enc.encode(JSON.stringify(reply)));})().catch(e=>status(`Image bridge write failed: ${e.message}`));
+   (async()=>{let reply;try{reply={id:image.id,...await models.run('images',async()=>{status('Generating Janus image locally');const result=await images.generate(image);const png=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=reject;reader.readAsDataURL(result.blob);});const {blob,...metadata}=result;return {...metadata,png:png.split(',')[1]};})};if(vm===target&&terminalLive)status('Image ready');}catch(e){reply={id:image.id,error:e.message};if(vm===target&&terminalLive){status(`Image request failed: ${e.message}`);}}if(vm===target&&ready)await target.create_file('image-response.json',enc.encode(JSON.stringify(reply)));})().catch(e=>status(`Image bridge write failed: ${e.message}`));
   }
   let envelope;try{const bytes=await target.read_file('request.json');if(bytes.length<=256*1024)envelope=JSON.parse(dec.decode(bytes));}catch{}
   if(envelope?.id&&envelope.id!==lastRequest){
    lastRequest=envelope.id;controls();status('Generating locally');event(`Guest HTTP request ${envelope.id}: ${envelope.request.messages?.length} messages, ${(envelope.request.tools||[]).length} tools`);
    // Keep terminal/lesson UI responsive while inference runs.
-   (async()=>{let reply;try{if(images.blocksText)throw Error('Text paused for Janus. Use Reload text in Optional image generation.');if(!loaded)throw Error('Model not loaded');reply={id:envelope.id,response:await workerCall('complete',envelope.request)};event(`Local inference returned ${reply.response.choices[0].finish_reason}`);status(`Response ready · local ${modelNames[selectedModel]}`);}catch(e){reply={id:envelope.id,error:e.message};status(`Inference failed: ${e.message}`);}if(vm===target&&ready){await target.create_file('response.json',enc.encode(JSON.stringify(reply)));controls();}})().catch(e=>status(`Bridge write failed: ${e.message}`));
+   (async()=>{let reply;try{reply={id:envelope.id,response:await models.run('text',()=>workerCall('complete',envelope.request))};event(`Local inference returned ${reply.response.choices[0].finish_reason}`);status(`Response ready · local ${modelNames[selectedModel]}`);}catch(e){reply={id:envelope.id,error:e.message};status(`Inference failed: ${e.message}`);}if(vm===target&&ready){await target.create_file('response.json',enc.encode(JSON.stringify(reply)));controls();}})().catch(e=>status(`Bridge write failed: ${e.message}`));
   }
  }finally{polling=false;}
 }
 setInterval(()=>poll().catch(e=>event(`Poll error: ${e.message}`)),400);
-window.addEventListener('beforeunload',()=>{images.reset();web.reset();worker?.terminate();vm?.destroy();});
+window.addEventListener('beforeunload',()=>{models.reset();web.reset();vm?.destroy();});
 event(`crossOriginIsolated=${crossOriginIsolated}; SharedArrayBuffer=${typeof SharedArrayBuffer}; WebGPU=${!!navigator.gpu}`);
 // Read-only diagnostics plus genuine serial/file APIs for reproducible isolated tests.
 window.lab={get imageState(){return images.state;},get graphics(){return terminal.graphics;},get resources(){return terminal.resources;},get webResponse(){return web.lastResponse;},get vm(){return vm;},get serial(){return serial;},get ready(){return ready;},get loaded(){return loaded;},get phase(){return phase;},get started(){return started;},get screen(){return terminal.screen;},get geometry(){return {cols:terminal.cols,rows:terminal.rows};}};

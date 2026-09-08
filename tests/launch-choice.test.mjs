@@ -1,65 +1,39 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {mountLaunchChoice,startProvider} from '../public/launch-choice.mjs';
-import {mountImagePanel} from '../public/image-panel.mjs';
+import {mountLaunchChoice} from '../public/launch-choice.mjs';
+import {confirmJanus} from '../public/janus-consent.mjs';
+import {SessionModels} from '../public/session-models.mjs';
 
-// DOM/worker fixtures test control flow only; real inference is verified by the
-// shared-browser harness, never by these synthetic worker replies.
-function fixture(){
- const elements=new Map();
- const $=id=>{
-  if(!elements.has(id))elements.set(id,{value:id==='image-support'?'off':id==='model'?'qwen':'',checked:false,hidden:false,disabled:false,
-   listeners:{},addEventListener(name,fn){this.listeners[name]=fn;},append(child){child.parent=this;},removeAttribute(){}});
-  return elements.get(id);
- };
- const change=id=>$(id).listeners.change?.();
- return {$,change};
-}
-test('independent selections: default text boot and Janus preparation never imply consent',async()=>{
- const {$,change}=fixture(),choice=mountLaunchChoice($),calls=[];
- assert.equal(choice.imageSupport,'off');assert.equal(choice.allowed,true);
- assert.equal($('image-size-hint').hidden,true);
- for(const model of ['qwen','bonsai','simulator']){
-  $('model').value=model;
-  for(const support of ['off','demo','janus']){
-   $('image-support').value=support;change('image-support');
-   assert.equal($('model').value,model);assert.equal(choice.allowed,true);
-   assert.equal($('image-consent').checked,false);
-   await startProvider(choice.imageSupport,{startText:()=>calls.push(model),prepareImages:()=>calls.push('prepare')});
-   assert.equal($('image-size-hint').hidden,support!=='janus');
-  }
- }
- assert.deepEqual(calls,['qwen','qwen','prepare','bonsai','bonsai','prepare','simulator','simulator','prepare']);
+test('launch choice locks until shutdown, without treating selection as consent',()=>{
+ const elements=new Map();const $=id=>{if(!elements.has(id))elements.set(id,{value:'off',addEventListener(){}});return elements.get(id);};
+ const choice=mountLaunchChoice($);$('image-support').value='janus';assert.equal(choice.imageSupport,'janus');
  choice.start();assert.equal(choice.allowed,false);assert.equal($('image-support').disabled,true);
- assert.equal(choice.imageSupport,'janus');assert.equal($('model').value,'simulator');
- choice.reset();assert.equal(choice.allowed,true);assert.equal($('image-support').disabled,false);
+ choice.reset();assert.equal(choice.allowed,true);
 });
-test('Janus preparation opens existing consent controls without a worker and permits Reload text',async()=>{
- const {$}=fixture(),order=[],oldDocument=globalThis.document;
- globalThis.document={getElementById:$};
- try{
-  const panel=mountImagePanel({textBusy:()=>false,suspendText:()=>assert.fail('no model to release'),resumeText:async()=>order.push('selected LLM'),textLabel:()=> 'Qwen3 8B',selectProvider:async()=>{}});
-  panel.prepare();assert.equal(panel.state,'off');assert.equal(panel.blocksText,true);
-  assert.equal($('image-panel').open,true);assert.equal($('image-enable').disabled,true);
-  assert.equal($('image-text').disabled,false);
-  await panel.enable();assert.equal(panel.state,'off');
-  await $('image-text').onclick();assert.deepEqual(order,['selected LLM']);assert.equal(panel.blocksText,false);
- }finally{globalThis.document=oldDocument;}
+test('consent modal explicitly accepts or goes back; Escape never consents',async()=>{
+ const accept={},back={},dialog={querySelector:s=>s==='[data-accept]'?accept:back,showModal(){this.open=true;},close(){this.open=false;}};back.focus=()=>{};
+ let promise=confirmJanus(dialog);assert.equal(dialog.open,true);back.onclick();assert.equal(await promise,false);
+ promise=confirmJanus(dialog);dialog.oncancel({preventDefault(){}});assert.equal(await promise,false);
+ promise=confirmJanus(dialog);accept.onclick();assert.equal(await promise,true);assert.equal(dialog.open,false);
 });
-test('panel refuses unconsented/duplicate enables; releases images before text and resets consent',async()=>{
- const {$}=fixture(),order=[];const oldDocument=globalThis.document,oldWorker=globalThis.Worker;
- globalThis.document={getElementById:$};
- globalThis.Worker=class {
-  constructor(){order.push('image worker');}
-  postMessage(m){queueMicrotask(()=>this.onmessage({data:{id:m.id,result:{ready:true}}}));}
-  terminate(){order.push('terminate image');}
- };
- try{
-  const panel=mountImagePanel({textBusy:()=>false,suspendText:()=>order.push('suspend text'),resumeText:async()=>order.push('load selected text'),textLabel:()=> 'Qwen3 8B',selectProvider:async provider=>{assert.equal(provider,'janus');order.push('configure Janus');}});
-  await panel.enable();assert.deepEqual(order,[]);
-  $('image-consent').checked=true;await Promise.all([panel.enable(),panel.enable()]);
-  assert.deepEqual(order,['suspend text','configure Janus','image worker']);assert.equal(panel.blocksText,true);
-  await $('image-text').onclick();assert.deepEqual(order.slice(-2),['terminate image','load selected text']);
-  assert.equal(panel.blocksText,false);panel.reset();assert.equal($('image-consent').checked,false);
- }finally{globalThis.document=oldDocument;globalThis.Worker=oldWorker;}
+test('fixed providers serialize residency and automatically restore the same selected models',async()=>{
+ const events=[],resident=new Set();
+ const backend=name=>({ready:()=>resident.has(name),unload:()=>{resident.delete(name);},load:async()=>{assert.equal(resident.size,0);resident.add(name);events.push('load '+name);}});
+ const models=new SessionModels({text:backend('Bonsai'),images:backend('Janus')});
+ await Promise.all([models.run('images',async()=>events.push('image 1')),models.run('text',async()=>events.push('text')),models.run('images',async()=>events.push('image 2'))]);
+ assert.deepEqual(events,['load Janus','image 1','load Bonsai','text','load Janus','image 2']);
+ await models.run('images',async()=>events.push('image 3'));assert.equal(events.filter(e=>e==='load Janus').length,2);
+ models.reset();assert.equal(resident.size,0);
+});
+test('shutdown invalidates queued requests and does not revive an old session',async()=>{
+ let finish;const loading=new Promise(resolve=>finish=resolve);let called=false;
+ const models=new SessionModels({images:{ready:()=>false,unload(){},load:()=>loading}});
+ const first=models.run('images',async()=>{called=true;});const queued=models.run('images',async()=>{called=true;});
+ await Promise.resolve();models.reset();finish();
+ await assert.rejects(first,/Session stopped/);await assert.rejects(queued,/Session stopped/);assert.equal(called,false);
+});
+test('failed requests never substitute providers; the same backend can retry',async()=>{
+ let count=0;const models=new SessionModels({images:{ready:()=>false,unload(){},load:async()=>{count++;throw Error('Janus unavailable');}}});
+ await assert.rejects(models.run('images',()=>assert.fail()),/Janus unavailable/);
+ await assert.rejects(models.run('images',()=>assert.fail()),/Janus unavailable/);assert.equal(count,2);
 });

@@ -113,17 +113,18 @@ Run the focused grading tests with `node --test tests/tutorial-eval.test.mjs`. M
 ## Image support
 
 The launch gate has two dropdowns: **LLM** and **Image support: Off / Demo / Janus**.
-Janus starts Linux without downloading Qwen first. Accept the existing license
-and ~3 GB download consent below the terminal, then enable it. The proposed
-once-off license modal remains deferred.
+When Janus is selected, Start shows a single license/download consent modal on
+the launch screen. Back starts nothing; Accept & start boots with Janus. There
+is no image settings panel in the tutorial. LLM, image provider and context are
+fixed until shutdown; a new session starts from the launch screen.
 
 ```sh
 term-llm image "A pelican riding a bike." -o pelican.png
 ```
 
 This is the normal native command, not a tutorial extension. `image.provider`
-selects the endpoint: `janus`, `demo`, or disabled `images-off`. Switching to Janus
-updates native configuration before loading the model. No `--generate`, `--demo`
+selects the endpoint: `janus`, `demo`, or disabled `images-off`. The selected provider
+is written to native configuration at boot. No `--generate`, `--demo`
 or `--seed` flags are added. The provider chooses the seed.
 The CLI saves the PNG and displays it inline in the terminal. The sidebar stays on your lesson. There is no
 custom `.png.json` sidecar. Native `--provider`, stdin, output and help work normally.
@@ -135,11 +136,12 @@ The build uses ReleaseSafe and one resize owner; repeated images and resizing
 have browser coverage. Full details and remaining protocol limits are in
 [docs/inline-images.md](docs/inline-images.md).
 
-Janus and Qwen/Bonsai workers are never kept resident together. **Reload text** releases
-Janus and restores the selected LLM; files and lesson progress survive. Janus
-stays the configured image provider after unload, so another image request fails
-honestly until re-enabled. It never becomes a canned drawing. Shutdown discards
-the guest; download files first.
+Janus and the selected LLM take turns using GPU memory automatically. An image
+command always uses Janus; a text command always uses the chosen LLM. No provider
+fallback, switching buttons or repeated consent dialogs. The first text request
+may load/download the chosen LLM; subsequent loads use cache where available.
+Guest files and conversation history survive this internal residency management.
+Shutdown discards the guest and returns to the launch screen.
 
 Model pins, license details and tests: [JANUS-IMAGE-GENERATION.md](JANUS-IMAGE-GENERATION.md).
 
@@ -151,7 +153,7 @@ node scripts/stage-hosting.mjs
 IMAGE_TEST_STAGED=1 node scripts/image-generator-live.mjs
 IMAGE_TEST_LAUNCH=1 IMAGE_TEST_STAGED=1 node scripts/image-generator-live.mjs
 IMAGE_TEST_DEMO=1 IMAGE_TEST_STAGED=1 node scripts/image-generator-live.mjs
-IMAGE_TEST_BONSAI=1 IMAGE_TEST_STAGED=1 node scripts/image-generator-live.mjs # integration needs live test
+IMAGE_TEST_BONSAI=1 IMAGE_TEST_CONTEXT=4096 IMAGE_TEST_STAGED=1 node scripts/image-generator-live.mjs
 ```
 
 Browser tests use the authenticated shared browser, local static routing and real

@@ -52,7 +52,7 @@ license and does not prohibit this tutorial integration:
   military, exploitation/harm of minors, malicious false information,
   unauthorized personal information, harassment, and discriminatory/harmful or
   rights-affecting automated decisions). The full text, not this summary,
-  governs. The checkbox makes §5 and **all Attachment A restrictions** binding
+  governs. The explicit Accept & start agreement makes §5 and **all Attachment A restrictions** binding
   terms of model use, and acceptance plus download consent are required to enable.
 - §6 assigns output responsibility to the user; DeepSeek generally claims no
   output rights except as provided in the agreement. The UI warns to inspect
@@ -61,7 +61,7 @@ license and does not prohibit this tutorial integration:
   existing full copies ship under `licenses/`.
 
 No concrete license restriction blocks this implementation. We do not infer
-that local browser execution waives these obligations or that the checkbox is a
+that local browser execution waives these obligations or that the consent modal is a
 technical content filter. No new content moderation capability is claimed.
 
 ## Native provider boundary
@@ -73,10 +73,16 @@ uses `image.provider` and the named OpenAI-compatible configurations:
 - `janus`: `/images/janus/v1/images/generations`, model `Janus-Pro-1B`, real browser inference or an error.
 - `images-off`: `/images/off/v1/images/generations`, always an explicit disabled error.
 
-The browser's enable action updates native configuration via a bounded, fixed-name
-configuration channel before loading Janus. The guest bridge invokes the native
-`config set image.provider` command with an allowlisted value; it never executes
-model-supplied commands. Initial selection is written into the guest config at boot.
+The launch screen presents license/download consent once, before boot, only when
+Janus is selected. Back cancels without booting or downloading models. Accept
+locks the chosen LLM/image provider/context for that session. Initial native
+configuration contains the chosen image provider; there is no runtime provider
+configuration channel or in-tutorial image settings panel.
+
+GPU residency is serialized automatically: image requests use Janus, text
+requests use the same selected LLM. Cached reloads do not ask for consent again.
+Neither provider is silently replaced by another. Shutdown is the only UI exit
+from the fixed session configuration.
 
 Requests are bounded to 8 KiB, prompts to 2000 bytes, and one image per request. Janus
 uses the existing correlated 9p mailbox; the response must decode to a 384×384 PNG.
@@ -94,16 +100,24 @@ Shared authenticated NVIDIA/Lovelace browser, cached pinned weights, no browser
 flags or service changes. Local hashed-staging routing only; not deployed.
 - Plain native `term-llm image "A cat riding a bicycle." -o generated-cat.png`
   generated a genuine 384×384 PNG; the saved file and actual terminal pixels were checked.
-- Native `config get image.provider` returned `janus` after enabling.
+- Native `config get image.provider` stays `janus` through image → text → image.
 - Launch-selected Demo and a repeated image survive resize/scrollback. The demo-provider response matches the bundled demo PNG. Janus output is
   distinct; Janus errors and even a canned PNG supplied as a Janus response are rejected.
 - Default launch requested no Janus runtime/weights before consent.
-- Cancel/unload then plain `image cat` returned an error without an output file.
+- Back in the boot modal starts nothing; no Janus runtime/weights before acceptance.
 - Simulator text reload, preserved PNG/lesson progress, real zsh completion and
-  shutdown passed. Images-first -> real Janus -> real Qwen3 8B also passed on the new native CLI,
+  shutdown passed in prior integration checks. Historical images-first -> real Janus -> real Qwen3 8B passed,
   with no text runtime requested before Janus consent and no worker overlap.
 
 Reproduce via README commands. Ignored evidence: `evidence/native-image-live.log`
 and `evidence/optional-janus-staged/`. No credentials, sample binaries or model
 weights are committed. The unchanged runtime dependency chain retains the previously
 documented Node-side npm audit findings; no audit-clean claim is made.
+
+### Boot-only consent / fixed session verification
+
+Current local staged-browser runs pass Janus → Simulator → Janus and genuine
+Janus → Bonsai (4K, WebGPU) → Janus using ordinary native CLI commands. No
+residency overlap, repeated modal, provider changes, or bottom controls. Lesson
+progress is retained; shutdown releases workers. Off and Demo launch without a
+modal or image-model downloads. Qwen residency was not rerun for this revision.
