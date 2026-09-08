@@ -2,13 +2,14 @@
 # Executed inside the emulated guest only. /mnt is v86's existing host9p mount.
 set -eu
 export HOME=/root XDG_CONFIG_HOME=/root/.config XDG_DATA_HOME=/root/.local/share XDG_CACHE_HOME=/root/.cache
+# wterm supports direct Kitty graphics, not native Unicode placements. Do not
+# advertise xterm-kitty; the browser previews the provider PNG without CLI patches.
 export TERM=xterm-256color GOMAXPROCS=1 GOGC=50
 export PATH=/tmp:$PATH
 mkdir -p "$XDG_CONFIG_HOME/term-llm" /mnt/workspace
 ln -s /mnt/workspace /workspace
 cp /mnt/guest-config.yaml "$XDG_CONFIG_HOME/term-llm/config.yaml"
-cp /mnt/term-llm /tmp/term-llm-native
-cp /mnt/term-llm-launch.sh /tmp/term-llm
+cp /mnt/term-llm /tmp/term-llm
 cp /mnt/guest-bridge /tmp/guest-bridge
 cp /mnt/git /tmp/git
 cp /mnt/picnic-mcp /tmp/picnic-mcp
@@ -16,7 +17,7 @@ chmod +x /tmp/picnic-mcp
 cat > "$XDG_CONFIG_HOME/term-llm/mcp.json" <<'MCP'
 {"servers":{"picnic":{"command":"/tmp/picnic-mcp"}}}
 MCP
-chmod +x /tmp/term-llm /tmp/term-llm-native /tmp/guest-bridge /tmp/git
+chmod +x /tmp/term-llm /tmp/guest-bridge /tmp/git
 # Offline upstream Git; no host identity, remotes, hooks, or credentials.
 git -C /workspace init -b main
 git -C /workspace config user.name 'Browser Lab'

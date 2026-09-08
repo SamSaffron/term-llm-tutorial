@@ -2,6 +2,18 @@ default_provider: browser
 approval:
   default_mode: prompt
 providers:
+  demo:
+    type: openai_compatible
+    base_url: http://127.0.0.1:8080/images/demo/v1
+    model: demo
+  janus:
+    type: openai_compatible
+    base_url: http://127.0.0.1:8080/images/janus/v1
+    model: Janus-Pro-1B
+  images-off:
+    type: openai_compatible
+    base_url: http://127.0.0.1:8080/images/off/v1
+    model: off
   browser:
     type: openai_compatible
     base_url: http://127.0.0.1:8080/v1
@@ -28,3 +40,7 @@ serve:
   disable_location_sharing: true
   projects:
     enabled: false
+
+image:
+  provider: __IMAGE_PROVIDER__
+  output_dir: /workspace

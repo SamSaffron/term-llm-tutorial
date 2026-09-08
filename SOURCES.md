@@ -5,7 +5,7 @@ This Git repository contains authored source, the npm lockfile, native build rec
 | Component | Pin / source | License / handling |
 |---|---|---|
 | Tutorial UI, simulator, guest bridge and picnic MCP | This repository | MIT (`LICENSE`) |
-| term-llm guest CLI | [Upstream6f79d50988f33d890b85c66df1168fa371e700a9](https://github.com/samsaffron/term-llm/tree/6f79d50988f33d890b85c66df1168fa371e700a9) — unmodified | MIT; dependency notices in `licenses/go/` |
+| term-llm guest CLI | [Upstreamba07b58441a660e3f279837851a8d32eb948f083](https://github.com/samsaffron/term-llm/tree/ba07b58441a660e3f279837851a8d32eb948f083) — unmodified | MIT; dependency notices in `licenses/go/` |
 | v86 | npm0.5.458, source d96be774e549a83371b038b86e819804c96b921f | BSD-2-Clause; npm integrity pinned |
 | WebLLM | npm0.2.84 | Apache-2.0 |
 | Qwen3 8B q4f32 | mlc-ai/Qwen3-8B-q4f32_1-MLC revision34026572351006ba1865d11319309b151d9ccf16 | Apache-2.0; visiting browser downloads weights directly from Hugging Face only in Qwen mode |
@@ -30,7 +30,7 @@ This Git repository contains authored source, the npm lockfile, native build rec
 
 These three files are fetched directly by the visiting browser, never committed or redistributed by the tutorial host. Do not add cached copies to Git or the staging allowlist without resolving their corresponding-source obligations. Generic upstream Linux/Buildroot links are not proof of the exact image's complete corresponding source.
 
-Simulator text uses no model weights or inference runtime. The separate optional Janus image feature downloads its own weights only after explicit consent, including when text uses Simulator. All three modes still run the real guest operating system and CLI. All third-party license terms remain applicable even while this repository is private.
+Simulator text uses no model weights or inference runtime. The separate optional Janus image feature downloads its own weights only after explicit consent, including when text uses Simulator. All three modes still run the real guest operating system and CLI. All third-party license terms remain applicable.
 
 
 ## Optional Janus images
@@ -60,3 +60,7 @@ API demonstrated by https://huggingface.co/spaces/webml-community/Janus-Pro-WebG
 and the separately verified browser harness; it adds guest transport, consent,
 fixed q4/fp32 sessions, worker-local seeds and termination-based cancellation.
 No hosted image inference API or model weight mirror is provided.
+
+## Native image-provider integration
+
+The CLI is built from clean upstream commit `ba07b58441a660e3f279837851a8d32eb948f083`, including term-llm PR1120. `scripts/build-native-cli.sh` fetches that exact Git object, rejects modified/wrong source, builds the upstream frontend and Linux/i386 softfloat binary, and does not apply patches. The old downloadable CLI binary is removed from the bootstrap manifest. Guest demo/Janus HTTP endpoints implement the native OpenAI-compatible Images API; no image-command wrapper is installed.

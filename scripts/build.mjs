@@ -3,6 +3,7 @@ import {execFileSync} from 'node:child_process';
 import { build } from 'esbuild';
 import { copyFile, mkdir, readFile } from 'node:fs/promises';
 await mkdir('public/assets',{recursive:true});
+execFileSync('sh',['scripts/build-native-cli.sh'],{stdio:'inherit',env:process.env});
 await build({entryPoints:['public/app.mjs'],outfile:'public/app.js',bundle:true,format:'esm',external:['./assets/libv86.mjs'],minify:true,define:{__GUEST_WEB_SW_HASH__:JSON.stringify(createHash('sha256').update(await readFile('public/guest-web/sw.js')).digest('hex').slice(0,20))}});
 await build({entryPoints:['public/bonsai-worker.mjs'],outfile:'public/bonsai-worker.js',bundle:true,format:'esm',platform:'browser',minify:true});
 await build({entryPoints:['public/inference-worker.mjs'],outfile:'public/inference-worker.js',bundle:true,format:'esm',minify:true});

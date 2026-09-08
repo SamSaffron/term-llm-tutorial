@@ -37,7 +37,7 @@ The bootstrap downloads hash-pinned existing public runtime binaries and require
 - `public/simulator.mjs`, `simulator-worker.mjs`: bounded scripted provider, no network/filesystem/model access.
 - `public/boot.sh`, `guest-config.yaml`: guest setup, seeded notes, completion, prompt approval default.
 - `guest/`: Go localhost HTTP/9p bridge; `guest/picnic-mcp/`: real stdio MCP server.
-- Native CLI: unmodified upstream `6f79d50988f33d890b85c66df1168fa371e700a9`; no tutorial patch.
+- Native CLI: unmodified upstream `ba07b58441a660e3f279837851a8d32eb948f083`; no tutorial patch.
 - `scripts/build-guest.sh`, `build-git.sh`: native build recipes. No host service installation.
 - `scripts/stage-hosting.mjs`, `stage-cdn.mjs`: explicit runtime allowlist and content-hashed asset URLs.
 - `hosting/browser-linux-lab*.conf`: scoped nginx templates; adapt paths/includes for your host. Personal SSH/deployment configuration is not in this repository.
@@ -62,11 +62,14 @@ These target the hosted URL. For a private staged-static preflight, first run `n
 
 The Ghostty/unmodified-CLI migration passed the first eleven lessons in both Simulator and Qwen, including completion, approvals, chat/resume, built-in agents and checklist export. The twelfth lesson separately verifies actual web conversation and Ctrl+C shutdown. This establishes the tutorial path on the tested browser, not perfect arbitrary model answers or universal hardware support.
 
-## Rebuilding the native CLI
+## Native CLI
 
-In a clean, separate checkout of upstream term-llm, check out `6f79d50988f33d890b85c66df1168fa371e700a9`, then set `TERM_LLM_SOURCE` to that checkout when running `scripts/build-guest.sh`. This builds Linux/i386 with soft-float. The CLI frontend build also needs the toolchain required by that pinned upstream repository. The build refuses a different revision or modified tracked sources.
-
-`node scripts/build.mjs` builds browser bundles, the guest HTTP bridge and the small picnic MCP executable; it does not rebuild the entire CLI or Git. The bootstrap is the quickest way to obtain the already-tested native artifacts. It depends on the pinned public download URLs staying available; all downloaded bytes are verified.
+`npm run build` builds clean upstream `ba07b58441a660e3f279837851a8d32eb948f083`
+(includes native configurable image providers). The pinned checkout is cached in
+ignored `.native-cli/`; `TERM_LLM_SOURCE` may point to a clean checkout of that
+exact commit. Git, Go, Node/npm, Python3 and make are required. There are no
+patches, image-command wrappers, or synthetic CLI responses. Build output is
+cached only when its hash, source commit and tool versions match.
 
 ## Hosting
 
@@ -90,11 +93,12 @@ Deployment credentials belong to `production` environment secrets: `DEPLOY_SSH_K
 
 The docs repository owns the permanent `include /etc/nginx/term-llm-locations.d/*.conf;` in the term-llm HTTPS vhost. An administrator owns the tutorial route and headers under `/etc/nginx/term-llm-tutorial/`, including the static hashed-asset rules in `hosting/static-assets.conf`. Ordinary deployments change only `/var/www/term-llm-tutorial/learn/`, outside the docs site's deletion root. Build and stage before invoking `scripts/deploy-learn.sh`; it no longer builds or configures nginx. See [activation and verification](hosting/SECURITY.md).
 
-## A small Easter egg
+## Demo images
 
-Try `term-llm image cat` (or `tl image dog`, `elephant`, `rabbit`, `fox`, `owl`). These are original, **canned illustrations, not AI-generated images**. A guest-only launcher intercepts the image subcommand, saves a real PNG and displays it with Kitty graphics. Every other command invokes the unmodified native term-llm binary. Unknown animals/options fail honestly. `-o file.png`, `-o -` (raw PNG) and `--no-display` are supported; the demo does not claim the full native image command's options.
-
-Images are bundled offline in `guest/demo-images/`; rebuild with `uv run --with pillow scripts/draw-animals.py`. Real generation is a separate explicit opt-in, described below.
+Choose **Image support: Demo** to use the native demo provider. `term-llm image cat`
+returns one of six explicitly canned drawings: cat, dog, elephant, rabbit, fox,
+owl. No image model is loaded. Demo and Janus are separate Images API endpoints;
+Janus never falls back to a demo image.
 
 ## Full-tutorial model evaluation
 
@@ -106,59 +110,47 @@ The [tutorial eval](docs/tutorial-eval.md) runs all **13 lessons** with the real
 
 Run the focused grading tests with `node --test tests/tutorial-eval.test.mjs`. Model evidence stays local under ignored `evidence/tutorial-eval/`; review/redact raw traces before sharing them.
 
-## Optional local image generation
+## Image support
 
-Open **Optional image generation** beneath the terminal. Read/accept the linked
-DeepSeek Model License and ~3 GB download consent, then select **Accept & enable
-Janus**. Nothing in the image runtime or weights is requested before this action.
-This is not an additional lesson and never enables itself from a terminal command.
-
-Once the panel says ready, return to the shell (`/quit` from chat):
+The launch gate has two dropdowns: **LLM** and **Image support: Off / Demo / Janus**.
+Janus starts Linux without downloading Qwen first. Accept the existing license
+and ~3 GB download consent below the terminal, then enable it. The proposed
+once-off license modal remains deferred.
 
 ```sh
-term-llm image --generate "A pelican riding a bike." --seed 1 -o pelican.png
+term-llm image "A pelican riding a bike." -o pelican.png
 ```
 
-This guest-only extension leaves the native CLI binary unmodified. It generates a
-real 384×384 PNG, writes `pelican.png` and `pelican.png.json` (prompt, seed, model,
-revision) in the current directory, and displays it inline using wterm/Kitty.
-The optional panel also provides a preview and PNG download. Omit `--seed` to pick
-and record a random uint32 seed; omit `-o` for a unique filename. `-o -` streams raw
-PNG only (no sidecar), and `--no-display` suppresses terminal graphics. These are
-bounded tutorial options, not the full upstream CLI image provider interface.
+This is the normal native command, not a tutorial extension. `image.provider`
+selects the endpoint: `janus`, `demo`, or disabled `images-off`. Switching to Janus
+updates native configuration before loading the model. No `--generate`, `--demo`
+or `--seed` flags are added. The provider chooses the seed; the preview shows it.
+The CLI saves the PNG, and the guide shows its preview/download. There is no
+custom `.png.json` sidecar. Native `--provider`, stdin, output and help work normally.
 
-Enabling Janus terminates the text worker **before** creating the image worker.
-Text requests then fail with a switch-back instruction, rather than silently
-using Simulator. **Cancel / unload Janus** terminates loading or inference and
-retains cached downloads and saved guest files. **Reload text** terminates Janus
-before loading the originally selected text provider. Qwen/Bonsai and Janus are never
-kept in workers together. Browser/driver reclamation can be asynchronous; other
-tabs also consume memory. In Simulator mode, text stays honestly scripted while
-Janus images are genuine local inference. No image download is needed to use
-Simulator or the six canned illustrations.
+The pinned wterm version supports direct Kitty images but **not Unicode virtual
+placements emitted by the native CLI**. The guest therefore does not advertise
+`xterm-kitty`: preview/download is used rather than intercepting commands or
+patching terminal output. This avoids a reproduced terminal-core crash.
 
-Failures return nonzero with no canned fallback. WebGPU absence/no adapter is
-reported before importing the runtime. A model load has a 15-minute deadline;
-generation has a 3-minute deadline. Retry and text reload are explicit. Ctrl+C
-interrupts the guest command; use the browser's Cancel control to stop outstanding
-GPU work too. Shut down/reload releases workers and discards the guest; download
-files first. Cancel does not delete the browser's model cache (clear site storage
-in browser settings to remove it).
+Janus and Qwen/Bonsai workers are never kept resident together. **Reload text** releases
+Janus and restores the selected LLM; files and lesson progress survive. Janus
+stays the configured image provider after unload, so another image request fails
+honestly until re-enabled. It never becomes a canned drawing. Shutdown discards
+the guest; download files first.
 
-See [JANUS-IMAGE-GENERATION.md](JANUS-IMAGE-GENERATION.md) for pins, license
-obligations and verified browser results. Local-only browser tests (authenticated
-shared CDP proxy; only static files are intercepted; no deployment):
+Model pins, license details and tests: [JANUS-IMAGE-GENERATION.md](JANUS-IMAGE-GENERATION.md).
 
 ```sh
+npm test
+(cd guest && go test -race ./...)
 npm run build
-node scripts/image-generator-live.mjs                      # Simulator + real Janus
-IMAGE_TEST_QWEN=1 node scripts/image-generator-live.mjs    # real Qwen → Janus → Qwen
-IMAGE_TEST_BONSAI=1 node scripts/image-generator-live.mjs  # Bonsai → Janus → Bonsai (integration still needs live test)
-node scripts/image-unsupported-live.mjs                    # controlled worker capability failures
 node scripts/stage-hosting.mjs
-IMAGE_TEST_STAGED=1 node scripts/image-generator-live.mjs # actual hashed staging output
+IMAGE_TEST_STAGED=1 node scripts/image-generator-live.mjs
+IMAGE_TEST_LAUNCH=1 IMAGE_TEST_STAGED=1 node scripts/image-generator-live.mjs
+IMAGE_TEST_DEMO=1 IMAGE_TEST_STAGED=1 node scripts/image-generator-live.mjs
+IMAGE_TEST_BONSAI=1 IMAGE_TEST_STAGED=1 node scripts/image-generator-live.mjs # integration needs live test
 ```
 
-These tests create/close only their own tabs and use cached pinned weights where
-available; they never change browser flags or restart services. Evidence and
-sample PNGs go under ignored `evidence/optional-janus*` directories.
+Browser tests use the authenticated shared browser, local static routing and real
+inference. They do not deploy or change browser flags. Evidence stays ignored.

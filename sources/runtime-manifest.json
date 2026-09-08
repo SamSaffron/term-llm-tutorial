@@ -1,11 +1,5 @@
 [
   {
-    "path": "public/assets/term-llm",
-    "url": "https://term-llm.com/learn/assets/term-llm.5c82689a5c1c9fd1a3c1.bin",
-    "sha256": "5c82689a5c1c9fd1a3c17b2e50c31e9cbc262d0ec11838947fa893743bfe200b",
-    "bytes": 62238880
-  },
-  {
     "path": "public/assets/guest-bridge",
     "url": "https://term-llm.com/learn/assets/guest-bridge.5e52f20ca8e4248a6158.bin",
     "sha256": "5e52f20ca8e4248a6158ccc2f05350ba5e9f033beff455c7aced478154bada67",

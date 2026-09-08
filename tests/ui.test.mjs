@@ -53,10 +53,12 @@ test('tutorial has thirteen lessons, shell-first boot, prompt approvals and Qwen
 });
 
 test('guest runtime uses stock CLI without obsolete artifact agent or preview watcher',async()=>{
- const boot=await readFile('public/boot.sh','utf8'),bridge=await readFile('guest/main.go','utf8'),app=await readFile('public/app.mjs','utf8'),build=await readFile('scripts/build-guest.sh','utf8');
+ const boot=await readFile('public/boot.sh','utf8'),bridge=await readFile('guest/main.go','utf8'),app=await readFile('public/app.mjs','utf8'),build=await readFile('scripts/build-native-cli.sh','utf8');
  assert.doesNotMatch(boot+bridge+app,/write-artifact|watchArtifact|TERM_LLM_BROWSER_WORKSPACE_FILE|active-cwd|tool-result.json/);
+ assert.doesNotMatch(boot+bridge+app,/term-llm-launch|term-llm-native|runImageDemo/);
+ assert.match(boot,/cp \/mnt\/term-llm \/tmp\/term-llm/);
  assert.match(boot,/ln -s \/mnt\/workspace \/workspace/);
- assert.match(build,/6f79d50988f33d890b85c66df1168fa371e700a9/);
- assert.match(build,/git status --porcelain/);
+ assert.match(build,/ba07b58441a660e3f279837851a8d32eb948f083/);
+ assert.match(build,/status --porcelain/);
  assert.match(await readFile('public/terminal.mjs','utf8'),/wasmPath:'assets\/ghostty-vt.wasm'/);
 });

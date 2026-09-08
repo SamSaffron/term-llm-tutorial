@@ -52,16 +52,17 @@ try{
   const changed=await shell('tl ask -f notes.txt "What should we do if it rains?"','changed-rain');assert.match(changed,/museum/);assert.doesNotMatch(changed,/community hall/);
   assert.match(await shell('tl ask "Explain quantum chromodynamics."','unsupported'),/scripted tutorial simulator, not a general AI/);
  }
- // Canned image Easter egg: actual PNG files and native Kitty graphics.
+ // Explicit native demo provider: actual PNG files and native Kitty graphics.
+ await shell("tl config set image.provider demo","demo-provider");
  for(const animal of ['cat','dog','elephant','rabbit','fox','owl']){
-  await shell(`tl image ${animal} -o ${animal}.png`,'image-'+animal);assert.match(await p.evaluate(()=>lab.screen),/canned illustration/);
+  await shell(`tl image ${animal} -o ${animal}.png`,'image-'+animal);
   const signature=await p.evaluate(async a=>Array.from((await lab.vm.read_file('workspace/'+a+'.png')).slice(0,8)),animal);
   assert.deepEqual(signature,[137,80,78,71,13,10,26,10]);
   await p.waitForFunction(()=>[...document.querySelectorAll('.term-images canvas')].some(c=>c.width>0&&c.height>0),null,{timeout:10000,polling:100});await save('image-'+animal);
  }
  await shell('tl image cat -o - > piped.png','image-pipe');
  assert.deepEqual(await p.evaluate(async()=>Array.from((await lab.vm.read_file('workspace/piped.png')).slice(0,8))),[137,80,78,71,13,10,26,10]);
- assert.match(await shell('tl image dinosaur; test $? -eq 2','image-unknown'),/no image model is connected/);
+ assert.match(await shell('tl image dinosaur; test $? -eq 1','image-unknown'),/this canned demo knows/);
  // Both panes must be visible on desktop; mobile tabs must preserve access to each.
  assert.ok(await p.locator('#chat-pane').isVisible());assert.ok(await p.locator('#guide-pane').isVisible());await p.setViewportSize({width:390,height:844});await p.locator('#tab-guide').click();assert.ok(await p.locator('#lesson').isVisible());assert.equal(await p.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);await save('mobile-guide');await p.locator('#tab-chat').click();assert.ok(await p.locator('#terminal').isVisible());await save('mobile-terminal');await fs.writeFile(dir+'/results.json',JSON.stringify(results,null,2));if(sim){assert.deepEqual(modelRequests,[]);assert.match(await p.locator('#effective').textContent(),/SIMULATOR.*scripted/);await fs.writeFile(dir+'/network.json',JSON.stringify({webgpuExposed:await p.evaluate(()=>!!navigator.gpu),modelRequests}));}console.log('PASS FIRST ELEVEN STEPS',sim?'SIMULATOR':'QWEN',JSON.stringify(results));
 }catch(e){await save('failure').catch(()=>{});await fs.writeFile(dir+'/failure.json',JSON.stringify({step,error:e.stack,completed:results},null,2));throw e;}finally{await p.close();await b.close();}

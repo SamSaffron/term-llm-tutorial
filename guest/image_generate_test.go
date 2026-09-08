@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"image"
@@ -12,17 +13,6 @@ import (
 	"time"
 )
 
-func TestParseGeneration(t *testing.T) {
-	req, out, display, err := parseImageGenerate([]string{"--generate", "a pelican", "--seed", "0", "-o", "bird.png", "--no-display"})
-	if err != nil || req.Prompt != "a pelican" || *req.Seed != 0 || out != "bird.png" || display {
-		t.Fatalf("bad parse: %+v %s %v %v", req, out, display, err)
-	}
-	for _, args := range [][]string{{"--generate"}, {"--seed", "-1", "x"}, {"--seed", "4294967296", "x"}, {"--seed"}, {"--wat", "x"}, {"-o"}} {
-		if _, _, _, err := parseImageGenerate(args); err == nil {
-			t.Fatalf("accepted %v", args)
-		}
-	}
-}
 func TestImageMailbox(t *testing.T) {
 	for _, failure := range []string{"", "Janus not enabled"} {
 		dir := t.TempDir()
@@ -41,7 +31,7 @@ func TestImageMailbox(t *testing.T) {
 				time.Sleep(5 * time.Millisecond)
 			}
 		}()
-		result, err := requestImage(dir, imageRequest{Prompt: "a pelican"}, time.Second)
+		result, err := requestImage(context.Background(), dir, imageRequest{Prompt: "a pelican"}, time.Second)
 		<-done
 		if (err != nil) != (failure != "") || (err == nil && result.Seed != 7) {
 			t.Fatalf("%+v %v", result, err)
@@ -54,11 +44,11 @@ func TestImageMailbox(t *testing.T) {
 func TestImageMailboxTimeoutAndLock(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "image-response.json"), []byte(`{"id":"stale","png":"bogus"}`), 0600)
-	if _, err := requestImage(dir, imageRequest{Prompt: "x"}, time.Millisecond); err == nil {
+	if _, err := requestImage(context.Background(), dir, imageRequest{Prompt: "x"}, time.Millisecond); err == nil {
 		t.Fatal("stale response accepted")
 	}
 	os.WriteFile(filepath.Join(dir, "image.lock"), nil, 0600)
-	if _, err := requestImage(dir, imageRequest{Prompt: "x"}, time.Second); err == nil {
+	if _, err := requestImage(context.Background(), dir, imageRequest{Prompt: "x"}, time.Second); err == nil {
 		t.Fatal("concurrent request accepted")
 	}
 }

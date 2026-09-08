@@ -1,8 +1,8 @@
 import {ImageGenerator} from './image-generator.mjs';
-export function mountImagePanel({textBusy,suspendText,resumeText,textLabel}) {
+export function mountImagePanel({textBusy,suspendText,resumeText,textLabel,selectProvider}) {
  const $=id=>document.getElementById(id);
  let switching=false,paused=false,reloadingText=false,epoch=0;
- const say=text=>{$('image-status').textContent=text;};
+ const say=text=>{$('image-status').textContent=text;$('image-start-status').textContent=text;};
  const controls=()=>{
   $('image-enable').disabled=switching||images.state!=='off'||!$('image-consent').checked;
   $('image-cancel').disabled=reloadingText||(!switching&&images.state==='off');
@@ -16,17 +16,21 @@ export function mountImagePanel({textBusy,suspendText,resumeText,textLabel}) {
   else if(p.status==='initiate')say(`Loading ${p.file} · checking cache / download`);
  }});
  $('image-consent').onchange=controls;
- $('image-enable').onclick=async()=>{
+ const enable=async()=>{
+  if(!$('image-consent').checked||switching||images.state!=='off')return;
   if(textBusy()){say('Wait for the current text request to finish before switching.');return;}
   const current=++epoch;switching=true;controls();
   try{
    suspendText();paused=true;
    say('Text worker released. Loading Janus (~3 GB plus runtime); Cancel releases the worker.');
+   await selectProvider('janus');
+   if(current!==epoch)return;
    await images.load($('image-consent').checked);
-   if(current===epoch)say('Janus ready · run term-llm image --generate "A pelican riding a bike." --seed 1 -o pelican.png in the shell. Text is paused until you switch back.');
+   if(current===epoch)say('Janus ready · run term-llm image "A pelican riding a bike." -o pelican.png in the shell. Text is paused until you switch back.');
   }catch(e){if(current===epoch)say(`Image model unavailable: ${e.message} Use Reload text to continue the tutorial.`);}
   finally{if(current===epoch){switching=false;controls();}}
  };
+ $('image-enable').onclick=enable;
  $('image-cancel').onclick=()=>{
   ++epoch;images.reset('Image operation canceled; no generated file returned.');switching=false;controls();
   say('Canceled / unloaded. GPU worker released; cached downloads and saved guest images retained. Reload text to continue.');
@@ -38,8 +42,17 @@ export function mountImagePanel({textBusy,suspendText,resumeText,textLabel}) {
   catch(e){if(current===epoch)say(`Text reload failed: ${e.message}. Retry Reload text, or shut down and choose Simulator.`);}
   finally{if(current===epoch){switching=false;reloadingText=false;controls();}}
  };
+ function preview(result,png){
+  $('image-example').textContent=result.model==='demo'?'term-llm image cat -o cat.png':'term-llm image "A pelican riding a bike." -o pelican.png';
+  $('image-preview').src=png;$('image-result').hidden=false;
+  $('image-caption').textContent=result.model==='demo'?`Demo · canned drawing · ${result.prompt}`:`Janus-Pro-1B · seed ${result.seed} · ${result.prompt}`;
+  $('image-download').href=png;$('image-download').download=result.model==='demo'?'demo.png':`janus-${result.seed}.png`;
+  $('image-start-guide').hidden=false;$('image-start-guide').append($('image-result'));
+ }
  controls();
  return {
+  enable,preview,
+  prepare(){paused=true;$('image-panel').open=true;controls();say('Janus selected · accept and enable below, or Reload text.');},
   get state(){return images.state;},
   get blocksText(){return paused||switching||images.state!=='off';},
   async generate(request){
@@ -47,10 +60,8 @@ export function mountImagePanel({textBusy,suspendText,resumeText,textLabel}) {
    const result=await images.generate(request);
    const png=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=reject;reader.readAsDataURL(result.blob);});
    if(current!==epoch)throw Error('Image operation canceled; result discarded.');
-   $('image-preview').src=png;$('image-result').hidden=false;
-   $('image-caption').textContent=`Genuine Janus-Pro-1B · seed ${result.seed} · ${result.prompt}`;
-   $('image-download').href=png;$('image-download').download=`janus-${result.seed}.png`;
-   say('Generated PNG ready for the guest. The command saves it with prompt/seed metadata and displays it inline unless --no-display was used.');
+   preview(result,png);
+   say('PNG ready. The native CLI saves it; preview and download are shown above.');
    const {blob,...metadata}=result;return {...metadata,png:png.split(',')[1]};
   },
   reset(){++epoch;images.reset();switching=false;reloadingText=false;paused=false;$('image-consent').checked=false;$('image-preview').removeAttribute('src');$('image-download').removeAttribute('href');$('image-result').hidden=true;controls();say('Off · no image downloads until you accept and enable.');},
