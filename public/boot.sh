@@ -37,6 +37,10 @@ uname -a
 # Install zsh beside the original shell; never replace the guest's system libc.
 mkdir -p /opt/zsh
 tar -xf /mnt/zsh-root.tar -C /opt/zsh
+# wterm uses xterm text capabilities plus Kitty graphics. Keep TERM for native
+# graphics detection, but provide the bundled text/line-editing capabilities.
+ln -sf xterm-256color /opt/zsh/etc/terminfo/x/xterm-kitty
+export TERMINFO=/opt/zsh/etc/terminfo
 cat > /tmp/zsh <<'ZSH_WRAPPER'
 #!/bin/sh
 exec /opt/zsh/lib/ld-musl-i386.so.1 --library-path /opt/zsh/lib:/opt/zsh/usr/lib /opt/zsh/bin/zsh "$@"
