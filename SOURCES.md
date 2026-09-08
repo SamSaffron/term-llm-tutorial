@@ -9,11 +9,13 @@ This Git repository contains authored source, the npm lockfile, native build rec
 | v86 | npm0.5.458, source d96be774e549a83371b038b86e819804c96b921f | BSD-2-Clause; npm integrity pinned |
 | WebLLM | npm0.2.84 | Apache-2.0 |
 | Qwen3 8B q4f32 | mlc-ai/Qwen3-8B-q4f32_1-MLC revision34026572351006ba1865d11319309b151d9ccf16 | Apache-2.0; visiting browser downloads weights directly from Hugging Face only in Qwen mode |
+| Bonsai 8B Q1_0 / tokenizer / auxiliary assets | Immutable upstream revisions and every asset hash in [docs/bonsai.md](docs/bonsai.md), enforced by `public/bonsai-model.mjs` | Model/tokenizer Apache-2.0; bitgpu auxiliary MIT; browser fetch only after starting Bonsai |
+| bitgpu / streaming SHA-256 | npm bitgpu **0.19.1**, @noble/hashes **2.0.1**, exact lockfile integrity | MIT; bundled tokenizer/Jinja Apache-2.0; notices in `licenses/bitgpu-*` and `licenses/noble-hashes-MIT.txt`; dedicated worker only |
 | Qwen runtime library | mlc-ai/binary-mlc-llm-libs025bcaf3780fa8254f5e5efd3bfea0a5397248f4, v0_2_84 Qwen3-8B-q4f32_1_cs1k-webgpu.wasm | Apache-2.0; browser fetch |
 | wterm DOM + Ghostty core | npm0.5.0; lockfile authoritative; bundled Ghostty WASM | Apache-2.0 (`licenses/wterm-LICENSE`); Ghostty MIT (`licenses/ghostty-LICENSE`) |
 | Git |2.50.1, zlib1.3.1, Zig0.14.1 build toolchain | GPL-2.0 / zlib / MIT; exact source checksums and recipe in `scripts/build-git.sh`. Runtime bootstrap fetches corresponding Git/zlib source archives alongside binary |
 | zsh guest environment | zsh5.9-r5 Alpine packages with musl/ncurses/libcap | Notices in `licenses/`; package metadata/patches in `sources/zsh/`; complete public source bundle pinned in runtime manifest |
-| Transformers.js / ONNX Runtime | Lockfile pins; legacy experimental worker source retained | Apache-2.0 / MIT; not used by text Qwen or Simulator mode; optional Janus uses a separate exact 3.8.1 bundle |
+| Transformers.js / ONNX Runtime | Lockfile pins; legacy experimental worker source retained | Apache-2.0 / MIT; not used by text Qwen, Bonsai or Simulator mode; optional Janus uses a separate exact 3.8.1 bundle |
 
 ## Public runtime bootstrap
 
@@ -28,7 +30,7 @@ This Git repository contains authored source, the npm lockfile, native build rec
 
 These three files are fetched directly by the visiting browser, never committed or redistributed by the tutorial host. Do not add cached copies to Git or the staging allowlist without resolving their corresponding-source obligations. Generic upstream Linux/Buildroot links are not proof of the exact image's complete corresponding source.
 
-Simulator text uses no model weights or inference runtime. The separate optional Janus image feature downloads its own weights only after explicit consent, including when text uses Simulator. Both modes still run the real guest operating system and CLI. All third-party license terms remain applicable.
+Simulator text uses no model weights or inference runtime. The separate optional Janus image feature downloads its own weights only after explicit consent, including when text uses Simulator. All three modes still run the real guest operating system and CLI. All third-party license terms remain applicable.
 
 
 ## Optional Janus images

@@ -4,16 +4,17 @@ A real Linux terminal on the left, thirteen short lessons on the right. Learn sh
 
 **Live:** https://term-llm.com/learn/
 
-## Two modes
+## Three modes
 
 - **Simulator:** explicitly scripted responses, no WebGPU or model download. Selected automatically when no GPU adapter is available. Uses the actual supplied files and conversation history, requests real tool calls, and explains unsupported questions.
 - **Qwen:** real browser-local inference using **Qwen3 8B q4f32**. Approximately4.6GB of weights; the tested16K runtime allocates roughly10GB of GPU buffers. Lower context limits are available. No cloud inference.
+- **Bonsai (optional):** real browser-local **Bonsai 8B Q1_0**, using pinned bitgpu 0.19.1 with f32 activation and q8 KV. ~1.16 GB weights plus tokenizer/runtime, cached when possible. GPU memory depends on context/device; weight size is not an allocation estimate. No CPU/cloud fallback. See [pins, licenses, limitations and live testing hooks](docs/bonsai.md).
 
-Both modes run the real native term-llm CLI inside v86 Linux. Files, commands, approvals and the local picnic MCP server are real. Reloading/shutting down discards the guest; the final lesson can download its checklist. Simulator is not represented as a language model.
+All three modes run the real native term-llm CLI inside v86 Linux. Files, commands, approvals and the local picnic MCP server are real. Reloading/shutting down discards the guest; the final lesson can download its checklist. Simulator is not represented as a language model.
 
 ## Run locally
 
-Requirements: Node22+ (tested with26), npm, Go compatible with `guest/go.mod` (tested with1.27), and Python3. Modern desktop browser; GPU only needed for Qwen mode.
+Requirements: Node22+ (tested with26), npm, Go compatible with `guest/go.mod` (tested with1.27), and Python3. Modern desktop browser; GPU only needed for real-model modes.
 
 ```sh
 npm ci
@@ -32,6 +33,7 @@ The bootstrap downloads hash-pinned existing public runtime binaries and require
 - `public/app.mjs`, `index.html`, `app.css`: terminal, lifecycle and mode selection.
 - `public/tutorial.mjs`: thirteen lessons and navigation; navigation never executes commands.
 - `public/inference-worker.mjs`, `protocol.mjs`, `qwen-tools.mjs`: Qwen transport, native JSON calls, real tool history; legacy XML support retained.
+- `public/bonsai-worker.mjs`, `bonsai-runtime.mjs`, `bonsai-adapter.mjs`, `bonsai-model.mjs`, `bonsai-downloads.mjs`: optional GPU-only Bonsai, native tool schemas, fail-closed transport, pinned streaming cache.
 - `public/simulator.mjs`, `simulator-worker.mjs`: bounded scripted provider, no network/filesystem/model access.
 - `public/boot.sh`, `guest-config.yaml`: guest setup, seeded notes, completion, prompt approval default.
 - `guest/`: Go localhost HTTP/9p bridge; `guest/picnic-mcp/`: real stdio MCP server.
@@ -131,7 +133,7 @@ placements emitted by the native CLI**. The guest therefore does not advertise
 `xterm-kitty`: preview/download is used rather than intercepting commands or
 patching terminal output. This avoids a reproduced terminal-core crash.
 
-Janus and Qwen workers are never kept resident together. **Reload text** releases
+Janus and Qwen/Bonsai workers are never kept resident together. **Reload text** releases
 Janus and restores the selected LLM; files and lesson progress survive. Janus
 stays the configured image provider after unload, so another image request fails
 honestly until re-enabled. It never becomes a canned drawing. Shutdown discards
@@ -147,6 +149,7 @@ node scripts/stage-hosting.mjs
 IMAGE_TEST_STAGED=1 node scripts/image-generator-live.mjs
 IMAGE_TEST_LAUNCH=1 IMAGE_TEST_STAGED=1 node scripts/image-generator-live.mjs
 IMAGE_TEST_DEMO=1 IMAGE_TEST_STAGED=1 node scripts/image-generator-live.mjs
+IMAGE_TEST_BONSAI=1 IMAGE_TEST_STAGED=1 node scripts/image-generator-live.mjs # integration needs live test
 ```
 
 Browser tests use the authenticated shared browser, local static routing and real

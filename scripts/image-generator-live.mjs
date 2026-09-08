@@ -12,8 +12,11 @@ const manifest=staged?JSON.parse(await fs.readFile('hosting/asset-manifest.json'
 const demoOnly=process.env.IMAGE_TEST_DEMO==='1';
 const imagesFirst=process.env.IMAGE_TEST_LAUNCH==='1';
 const consentOnly=process.env.IMAGE_TEST_CONSENT_ONLY==='1';
-const qwen=process.env.IMAGE_TEST_QWEN==='1'||(imagesFirst&&!consentOnly);
-const dir='evidence/optional-janus'+(imagesFirst?'-launch':'')+(qwen?'-qwen':'')+(staged?'-staged':'');await fs.mkdir(dir,{recursive:true});
+const bonsai=process.env.IMAGE_TEST_BONSAI==='1';
+const qwen=process.env.IMAGE_TEST_QWEN==='1'||(imagesFirst&&!consentOnly&&!bonsai);
+assert.ok(!(qwen&&bonsai),'Select only one real text model');
+const model=bonsai?'bonsai':qwen?'qwen':'simulator',textPattern=bonsai?/Bonsai 8B Q1/:qwen?/Qwen3 8B/:/SIMULATOR/;
+const dir='evidence/optional-janus'+(imagesFirst?'-launch':'')+(bonsai?'-bonsai':qwen?'-qwen':'')+(staged?'-staged':'');await fs.mkdir(dir,{recursive:true});
 const b=await connect(),p=await b.contexts()[0].newPage();
 const origin=process.env.IMAGE_TEST_ORIGIN||'https://term-llm.com';
 const requests=[],events=[],errors=[];let opted=false;
@@ -31,8 +34,8 @@ await p.exposeFunction('imageTestEvent',data=>{if(data.progress?.status==='progr
 await p.addInitScript(()=>{
  window.imageTestWorkers=[];window.imageTestOverlap=false;const W=Worker;
  window.Worker=class extends W{
-  constructor(url,options){super(url,options);this.testURL=String(url);if(!/simulator-worker|image-worker|inference-worker/.test(this.testURL))return;imageTestWorkers.push(this);if(imageTestWorkers.filter(w=>!w.testTerminated).length>1)imageTestOverlap=true;this.addEventListener('message',({data})=>{const clean={...data};if(clean.result?.blob)clean.result={...clean.result,blob:{size:clean.result.blob.size,type:clean.result.blob.type}};imageTestEvent({url:this.testURL,...clean});});}
-  terminate(){this.testTerminated=true;if(/simulator-worker|image-worker|inference-worker/.test(this.testURL))imageTestEvent({url:this.testURL,terminated:true});return super.terminate();}
+  constructor(url,options){super(url,options);this.testURL=String(url);if(!/simulator-worker|image-worker|inference-worker|bonsai-worker/.test(this.testURL))return;imageTestWorkers.push(this);if(imageTestWorkers.filter(w=>!w.testTerminated).length>1)imageTestOverlap=true;this.addEventListener('message',({data})=>{const clean={...data};if(clean.result?.blob)clean.result={...clean.result,blob:{size:clean.result.blob.size,type:clean.result.blob.type}};imageTestEvent({url:this.testURL,...clean});});}
+  terminate(){this.testTerminated=true;if(/simulator-worker|image-worker|inference-worker|bonsai-worker/.test(this.testURL))imageTestEvent({url:this.testURL,terminated:true});return super.terminate();}
  };
 });
 async function shell(command,tag,code='0'){
@@ -45,8 +48,8 @@ try{
  assert.equal(await p.locator('#image-support').inputValue(),'off');
  assert.equal(await p.locator('#model').inputValue(),'qwen');
  const imageRequests=()=>requests.filter(r=>/image-worker|image-runtime|Janus|transformers@3\.8/.test(r.url));
- const textRequests=()=>requests.filter(r=>/inference-worker|simulator-worker|Qwen|qwen|web-llm/.test(r.url));
- for(const model of ['qwen','simulator']){
+ const textRequests=()=>requests.filter(r=>/inference-worker|simulator-worker|bonsai-worker|Bonsai|bonsai|bitgpu|Qwen|qwen|web-llm/.test(r.url));
+ for(const model of ['qwen','bonsai','simulator']){
   await p.locator('#model').selectOption(model);
   for(const support of ['janus','off']){
    await p.locator('#image-support').selectOption(support);
@@ -63,11 +66,12 @@ try{
   assert.equal(await p.locator('#boot').isDisabled(),false);
   await p.screenshot({path:dir+'/front-gate-images.png'});
   assert.deepEqual(imageRequests(),[]);assert.deepEqual(textRequests(),[]);
-  if(!qwen)await p.locator('#model').selectOption('simulator');
- }else await p.locator('#model').selectOption(qwen?'qwen':'simulator');
+  await p.locator('#model').selectOption(model);
+ }else await p.locator('#model').selectOption(model);
+ if(process.env.IMAGE_TEST_CONTEXT)await p.locator('#context').selectOption(process.env.IMAGE_TEST_CONTEXT);
  if(demoOnly)await p.locator('#image-support').selectOption('demo');
  await p.locator('#boot').click();
- await p.waitForFunction(()=>['ready','failed'].includes(lab.phase),null,{timeout:240000});assert.equal(await p.evaluate(()=>lab.phase),'ready',await p.locator('#status').textContent());
+ await p.waitForFunction(()=>['ready','failed'].includes(lab.phase),null,{timeout:bonsai?600000:240000});assert.equal(await p.evaluate(()=>lab.phase),'ready',await p.locator('#status').textContent());
  assert.equal(await p.locator('.wordmark').getAttribute('href'),'/');
  await shell('cmp /tmp/term-llm /mnt/term-llm','stock-binary');
  assert.match(await shell('term-llm image --help','native-help'),/configured openai_compatible/);
@@ -96,12 +100,12 @@ try{
   assert.equal(await p.evaluate(()=>lab.imageState),'off');
   if(!consentOnly){await p.locator('#image-consent').check();opted=true;await p.locator('#image-enable').click();}
  }else{
-  assert.match(await p.locator('#effective').textContent(),qwen?/Qwen3 8B/:/SIMULATOR/);
+  assert.match(await p.locator('#effective').textContent(),textPattern);
   await shell('term-llm image "a pelican" --no-clipboard','off','1');
   await shell('term-llm image cat --provider demo -o canned.png --no-display --no-clipboard','canned');
   await shell('term-llm ask "What are three useful things to bring to a picnic?"','text-before');
   assert.deepEqual(imageRequests(),[]);
-  log('default',{zeroImageRequests:true,simulator:!qwen});
+  log('default',{zeroImageRequests:true,simulator:model==='simulator'});
   if(!consentOnly){await p.locator('#image-panel summary').click();await p.locator('#image-consent').check();opted=true;
   await p.locator('#image-enable').click();}
  }
@@ -109,7 +113,7 @@ try{
   assert.deepEqual(imageRequests(),[]);
   if(imagesFirst){
    await p.locator('#image-text').click();await p.waitForFunction(()=>lab.loaded,null,{timeout:120000});
-   assert.match(await p.locator('#effective').textContent(),qwen?/Qwen3 8B/:/SIMULATOR/);
+   assert.match(await p.locator('#effective').textContent(),textPattern);
   }
   await p.locator('#stop').click();await p.waitForFunction(()=>lab.vm===null);
   assert.equal(await p.locator('#image-consent').isChecked(),false);
@@ -145,7 +149,7 @@ try{
  await shell('term-llm image cat --no-clipboard -o no-fallback.png','no-fallback','1');
  assert.equal(await p.evaluate(async()=>{try{await lab.vm.read_file('workspace/no-fallback.png');return true;}catch{return false;}}),false);
  assert.ok(await p.evaluate(()=>imageTestWorkers.filter(w=>w.testURL.includes('image-worker')).every(w=>w.testTerminated)));
- await p.locator('#image-text').click();await p.waitForFunction(()=>lab.loaded,null,{timeout:120000});assert.match(await p.locator('#effective').textContent(),qwen?/Qwen3 8B/:/SIMULATOR/);
+ await p.locator('#image-text').click();await p.waitForFunction(()=>lab.loaded,null,{timeout:bonsai?600000:120000});assert.match(await p.locator('#effective').textContent(),textPattern);
  await shell('term-llm ask "What are three useful things to bring to a picnic?"','text-after');
  assert.equal(await p.locator('#lesson .lesson-count').textContent(),lesson,'switching must preserve tutorial progress');
  await shell('term-llm config completion zsh --install','completion');
@@ -156,7 +160,7 @@ try{
  assert.deepEqual(Buffer.from(await p.evaluate(async()=>Array.from(await lab.vm.read_file('workspace/generated-cat.png')))),bytes);
  // Cached load can be canceled immediately without leaving an orphan worker.
  await p.locator('#image-enable').click();await p.locator('#image-cancel').click();assert.equal(await p.evaluate(()=>lab.imageState),'off');
- await p.locator('#image-text').click();await p.waitForFunction(()=>lab.loaded,null,{timeout:120000});
+ await p.locator('#image-text').click();await p.waitForFunction(()=>lab.loaded,null,{timeout:bonsai?600000:120000});
  await p.locator('#stop').click();await p.waitForFunction(()=>lab.vm===null);assert.equal(await p.locator('#image-consent').isChecked(),false);
  assert.ok(await p.evaluate(()=>imageTestWorkers.every(w=>w.testTerminated)));
  assert.equal(await p.locator('#boot').isDisabled(),false);

@@ -19,7 +19,7 @@ test('independent selections: default text boot and Janus preparation never impl
  const {$,change}=fixture(),choice=mountLaunchChoice($),calls=[];
  assert.equal(choice.imageSupport,'off');assert.equal(choice.allowed,true);
  assert.equal($('image-size-hint').hidden,true);
- for(const model of ['qwen','simulator']){
+ for(const model of ['qwen','bonsai','simulator']){
   $('model').value=model;
   for(const support of ['off','demo','janus']){
    $('image-support').value=support;change('image-support');
@@ -29,7 +29,7 @@ test('independent selections: default text boot and Janus preparation never impl
    assert.equal($('image-size-hint').hidden,support!=='janus');
   }
  }
- assert.deepEqual(calls,['qwen','qwen','prepare','simulator','simulator','prepare']);
+ assert.deepEqual(calls,['qwen','qwen','prepare','bonsai','bonsai','prepare','simulator','simulator','prepare']);
  choice.start();assert.equal(choice.allowed,false);assert.equal($('image-support').disabled,true);
  assert.equal(choice.imageSupport,'janus');assert.equal($('model').value,'simulator');
  choice.reset();assert.equal(choice.allowed,true);assert.equal($('image-support').disabled,false);
