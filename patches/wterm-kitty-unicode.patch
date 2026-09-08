@@ -1,0 +1,417 @@
+diff --git a/packages/@wterm/core/src/terminal-core.ts b/packages/@wterm/core/src/terminal-core.ts
+index d87652a..c126d79 100644
+--- a/packages/@wterm/core/src/terminal-core.ts
++++ b/packages/@wterm/core/src/terminal-core.ts
+@@ -50,6 +50,8 @@ export interface TerminalImageDescriptor {
+ /** A pinned, non-virtual image placement in the retained active screen. */
+ export interface TerminalImagePlacement {
+   placementKey: string;
++  /** Source cell rectangle in an explicit Kitty Unicode placement grid. */
++  virtual?: { col: number; row: number; columns: number; rows: number };
+   imageId: number;
+   imageVersion: number;
+   /** Zero-based retained row, with row zero at the oldest retained row. */
+diff --git a/packages/@wterm/dom/src/graphics-layer.ts b/packages/@wterm/dom/src/graphics-layer.ts
+index 322e2e0..56e4d8e 100644
+--- a/packages/@wterm/dom/src/graphics-layer.ts
++++ b/packages/@wterm/dom/src/graphics-layer.ts
+@@ -599,6 +599,35 @@ export class GraphicsLayer {
+       imageData.data.set(rgba);
+     sourceContext.putImageData(imageData as ImageData, 0, 0);
+     context.clearRect(0, 0, pixelWidth, pixelHeight);
++    if (placement.virtual) {
++      const v = placement.virtual;
++      if (
++        ![v.col, v.row, v.columns, v.rows].every(safeNonNegativeInteger) ||
++        v.columns < 1 ||
++        v.rows < 1 ||
++        v.col >= v.columns ||
++        v.row >= v.rows
++      )
++        return false;
++      const gridWidth = v.columns * viewport.charWidth;
++      const gridHeight = v.rows * viewport.rowHeight;
++      const scale = Math.min(
++        gridWidth / image.width,
++        gridHeight / image.height,
++      );
++      const width = image.width * scale,
++        height = image.height * scale;
++      // Each row fragment clips the same aspect-preserving image. Erased,
++      // overwritten or reflowed placeholder cells disappear naturally.
++      context.drawImage(
++        source,
++        (gridWidth - width) / 2 - v.col * viewport.charWidth,
++        (gridHeight - height) / 2 - v.row * viewport.rowHeight,
++        width,
++        height,
++      );
++      return true;
++    }
+     context.drawImage(
+       source,
+       sourceX,
+diff --git a/packages/@wterm/ghostty/scripts/build-wasm.sh b/packages/@wterm/ghostty/scripts/build-wasm.sh
+index 7b385f4..fc7b1de 100755
+--- a/packages/@wterm/ghostty/scripts/build-wasm.sh
++++ b/packages/@wterm/ghostty/scripts/build-wasm.sh
+@@ -62,7 +62,7 @@ bash "$SCRIPT_DIR/patch-ghostty-wasm.sh" "$GHOSTTY_SRC"
+ # ---------------------------------------------------------------------------
+ cd "$ZIG_DIR"
+ echo "Building ghostty-vt WASM module..."
+-"$ZIG" build -Doptimize=ReleaseSmall
++"$ZIG" build -Doptimize=ReleaseSafe
+ 
+ mkdir -p "$OUT_DIR"
+ cp zig-out/bin/ghostty-vt.wasm "$OUT_DIR/"
+diff --git a/packages/@wterm/ghostty/src/__tests__/graphics.test.ts b/packages/@wterm/ghostty/src/__tests__/graphics.test.ts
+index 33bcdc3..ebd4aea 100644
+--- a/packages/@wterm/ghostty/src/__tests__/graphics.test.ts
++++ b/packages/@wterm/ghostty/src/__tests__/graphics.test.ts
+@@ -286,3 +286,105 @@ describe("GhosttyCore Kitty graphics", () => {
+     }
+   }, 30_000);
+ });
++
++describe("Kitty Unicode explicit grids", () => {
++  const cell = (row: number, col: number) =>
++    "\u{10eeee}" +
++    String.fromCodePoint([0x305, 0x30d][row]!) +
++    String.fromCodePoint([0x305, 0x30d][col]!);
++  const grid =
++    "\x1b[38;2;0;0;42m" +
++    cell(0, 0) +
++    cell(0, 1) +
++    "\r\n" +
++    cell(1, 0) +
++    cell(1, 1) +
++    "\x1b[0m";
++  const image =
++    "\x1b_Ga=t,f=24,s=1,v=1,i=42;" +
++    Buffer.from([255, 0, 0]).toString("base64") +
++    "\x1b\\";
++  const place = "\x1b_Ga=p,i=42,U=1,c=2,r=2\x1b\\";
++  it("renders a native-style chunked stream as one continuous grid, not glyphs", async () => {
++    const core = await newCore();
++    for (const byte of new TextEncoder().encode(image + place + grid))
++      core.writeRaw(new Uint8Array([byte]));
++    const state = core.getGraphicsState()!;
++    expect(state.placements).toHaveLength(1);
++    expect(state.placements[0]).toMatchObject({
++      imageId: 42,
++      row: 0,
++      col: 0,
++      columns: 2,
++      rows: 2,
++      virtual: { col: 0, row: 0, columns: 2, rows: 2 },
++    });
++    expect(core.getCell(0, 0).char).toBe(32);
++    expect(core.getCell(0, 0).chars).toBeFalsy();
++    state.placements[0]!.virtual!.rows = 1000;
++    expect(core.getGraphicsState()!.placements[0]!.virtual!.rows).toBe(2);
++    core.dispose();
++  });
++  it("tracks overwritten cells, scrollback, alternate screens and deletion", async () => {
++    const core = await newCore();
++    core.writeString(image + place + grid);
++    const generation = core.getGraphicsState()!.generation;
++    core.writeString("\x1b[1;1HX");
++    const split = core.getGraphicsState()!;
++    expect(split.generation).not.toBe(generation);
++    expect(split.placements).toHaveLength(2);
++    expect(split.placements[0]).toMatchObject({
++      col: 1,
++      columns: 1,
++      virtual: { col: 1, row: 0 },
++    });
++    core.writeString("\x1b[4;1H\r\n\r\n");
++    expect(core.getGraphicsState()!.placements).toHaveLength(2);
++    core.writeString("\x1b[?1049h");
++    expect(core.getGraphicsState()!.placements).toHaveLength(0);
++    core.writeString("\x1b[?1049l");
++    expect(core.getGraphicsState()!.placements).toHaveLength(2);
++    core.writeString("\x1b_Ga=d,d=I,i=42\x1b\\");
++    expect(core.getGraphicsState()!.placements).toHaveLength(0);
++    core.dispose();
++  });
++});
++
++it("retains dense native-style Unicode grids across shrink/grow/shrink reflow", async () => {
++  const core = await newCore();
++  core.resize(121, 51);
++  const marks = [
++    0x305, 0x30d, 0x30e, 0x310, 0x312, 0x33d, 0x33e, 0x33f, 0x346, 0x34a, 0x34b,
++    0x34c, 0x350, 0x351, 0x352, 0x357, 0x35b, 0x363, 0x364, 0x365, 0x366, 0x367,
++    0x368, 0x369, 0x36a, 0x36b,
++  ];
++  for (const id of [42, 43]) {
++    core.writeString(
++      `\x1b_Ga=t,f=24,s=1,v=1,i=${id};/wAA\x1b\\\x1b_Ga=p,i=${id},U=1,c=26,r=13\x1b\\\x1b[38;2;0;0;${id}m`,
++    );
++    for (let row = 0; row < 13; row++)
++      core.writeString(
++        marks
++          .map(
++            (mark, col) =>
++              "\u{10eeee}" + String.fromCodePoint(marks[row]!, mark),
++          )
++          .join("") + "\r\n",
++      );
++    core.writeString("\x1b[0mSaved\r\n");
++  }
++  for (const [cols, rows] of [
++    [89, 44],
++    [92, 44],
++    [89, 44],
++    [41, 8],
++    [121, 51],
++  ]) {
++    core.resize(cols!, rows!);
++    expect(core.getGraphicsState()!.placements).toHaveLength(2);
++    for (let y = 0; y < rows!; y++)
++      for (let x = 0; x < cols!; x++)
++        expect(core.getCell(y, x).char).toBeLessThanOrEqual(0x10ffff);
++  }
++  core.dispose();
++});
+diff --git a/packages/@wterm/ghostty/src/ghostty-core.ts b/packages/@wterm/ghostty/src/ghostty-core.ts
+index fd510eb..feb1985 100644
+--- a/packages/@wterm/ghostty/src/ghostty-core.ts
++++ b/packages/@wterm/ghostty/src/ghostty-core.ts
+@@ -101,7 +101,10 @@ function cloneGraphicsState(
+   return {
+     generation: state.generation,
+     images: state.images.map((image) => ({ ...image })),
+-    placements: state.placements.map((placement) => ({ ...placement })),
++    placements: state.placements.map((placement) => ({
++      ...placement,
++      ...(placement.virtual ? { virtual: { ...placement.virtual } } : {}),
++    })),
+   };
+ }
+ 
+diff --git a/packages/@wterm/ghostty/src/wasm-bindings.ts b/packages/@wterm/ghostty/src/wasm-bindings.ts
+index 8604c92..b9f3acb 100644
+--- a/packages/@wterm/ghostty/src/wasm-bindings.ts
++++ b/packages/@wterm/ghostty/src/wasm-bindings.ts
+@@ -276,7 +276,7 @@ export function freeBuffer(wasm: GhosttyWasm, ptr: number, size: number): void {
+ }
+ 
+ export const GRAPHICS_IMAGE_BYTES = 16;
+-export const GRAPHICS_PLACEMENT_BYTES = 60;
++export const GRAPHICS_PLACEMENT_BYTES = 76;
+ 
+ export interface WasmGraphicsImage {
+   imageId: number;
+@@ -287,6 +287,7 @@ export interface WasmGraphicsImage {
+ 
+ export interface WasmGraphicsPlacement {
+   placementKey: string;
++  virtual?: { col: number; row: number; columns: number; rows: number };
+   imageId: number;
+   imageVersion: number;
+   row: number;
+@@ -368,7 +369,21 @@ export function readGraphicsPlacements(
+     const placementId = view.getUint32(offset + 4, true);
+     const placementTag = view.getUint32(offset + 56, true);
+     result.push({
+-      placementKey: `${imageId}:${placementId}:${placementTag}`,
++      placementKey:
++        `${imageId}:${placementId}:${placementTag}` +
++        (placementTag === 2
++          ? `:${view.getUint32(offset + 12, true)}:${view.getUint32(offset + 16, true)}`
++          : ""),
++      ...(placementTag === 2
++        ? {
++            virtual: {
++              col: view.getUint32(offset + 60, true),
++              row: view.getUint32(offset + 64, true),
++              columns: view.getUint32(offset + 68, true),
++              rows: view.getUint32(offset + 72, true),
++            },
++          }
++        : {}),
+       imageId,
+       imageVersion: view.getUint32(offset + 8, true),
+       row: view.getUint32(offset + 12, true),
+@@ -384,7 +399,31 @@ export function readGraphicsPlacements(
+       z: view.getInt32(offset + 52, true),
+     });
+   }
+-  return result;
++  // Join vertically adjacent fragments from the same grid. Apart from
++  // avoiding a canvas per row, this prevents fractional CSS row heights from
++  // introducing antialiased seams across an otherwise continuous image.
++  const joined: WasmGraphicsPlacement[] = [];
++  const tails = new Map<string, WasmGraphicsPlacement>();
++  for (const p of result) {
++    const v = p.virtual;
++    if (!v) {
++      joined.push(p);
++      continue;
++    }
++    const key = `${p.imageId}:${p.imageVersion}:${p.placementKey.split(":")[1]}:${p.col}:${v.col}:${p.columns}:${v.columns}:${v.rows}:${p.row - v.row}:${p.z}`;
++    const previous = tails.get(key);
++    if (
++      previous &&
++      previous.row + previous.rows === p.row &&
++      previous.virtual!.row + previous.rows === v.row
++    ) {
++      previous.rows += p.rows;
++    } else {
++      joined.push(p);
++      tails.set(key, p);
++    }
++  }
++  return joined;
+ }
+ 
+ /**
+diff --git a/packages/@wterm/ghostty/zig/src/wasm_api.zig b/packages/@wterm/ghostty/zig/src/wasm_api.zig
+index 9bea4d2..bacbf4f 100644
+--- a/packages/@wterm/ghostty/zig/src/wasm_api.zig
++++ b/packages/@wterm/ghostty/zig/src/wasm_api.zig
+@@ -18,7 +18,7 @@ const Allocator = std.mem.Allocator;
+ const allocator = std.heap.wasm_allocator;
+ 
+ const GRAPHICS_IMAGE_RECORD_BYTES = 16;
+-const GRAPHICS_PLACEMENT_RECORD_BYTES = 60;
++const GRAPHICS_PLACEMENT_RECORD_BYTES = 76;
+ const GRAPHICS_MAX_RECORDS = 16 * 1024;
+ // Kitty payloads are base64 encoded before the upstream parser sees them.
+ // Keep the encoded command bounded as well as the decoded image storage.
+@@ -433,6 +433,15 @@ fn graphicsFingerprint(state: *State) u64 {
+ fn refreshGraphicsGeneration(state: *State) void {
+     const screen = @intFromEnum(state.terminal.screens.active_key);
+     const storage = activeStorage(state);
++    // Placeholder cells can move/change without mutating image storage.
++    var placements = storage.placements.iterator();
++    while (placements.next()) |entry| {
++        if (entry.value_ptr.location == .virtual) {
++            state.graphics_generation +%= 1;
++            state.graphics_screen = screen;
++            return;
++        }
++    }
+     if (!storage.dirty and state.graphics_screen == screen) return;
+ 
+     const fingerprint = graphicsFingerprint(state);
+@@ -485,8 +494,8 @@ fn imageVersionFor(state: *const State, image_id: u32) u32 {
+     return base | (@as(u32, @intFromEnum(state.terminal.screens.active_key)) << 31);
+ }
+ 
+-fn graphicsPlacements(state: *State, buf: [*]u8, max_records: u32) u32 {
+-    const capacity = @min(@as(usize, max_records), GRAPHICS_MAX_RECORDS);
++fn graphicsPlacements(state: *State, optional_buf: ?[*]u8, max_records: u32) u32 {
++    const capacity = if (optional_buf == null) GRAPHICS_MAX_RECORDS + 1 else @min(@as(usize, max_records), GRAPHICS_MAX_RECORDS);
+     var count: usize = 0;
+     var it = activeStorage(state).placements.iterator();
+     const screen = state.terminal.screens.active;
+@@ -503,6 +512,11 @@ fn graphicsPlacements(state: *State, buf: [*]u8, max_records: u32) u32 {
+         const placement_id = entry.key_ptr.placement_id.id;
+         const placement_tag: u32 = @intFromEnum(entry.key_ptr.placement_id.tag);
+         const offset = count * GRAPHICS_PLACEMENT_RECORD_BYTES;
++        const buf = optional_buf orelse {
++            count += 1;
++            continue;
++        };
++        @memset(buf[offset..][0..GRAPHICS_PLACEMENT_RECORD_BYTES], 0);
+         writeU32(buf, offset, image.id);
+         writeU32(buf, offset + 4, placement_id);
+         writeU32(buf, offset + 8, imageVersionFor(state, image.id));
+@@ -520,6 +534,50 @@ fn graphicsPlacements(state: *State, buf: [*]u8, max_records: u32) u32 {
+         writeU32(buf, offset + 56, placement_tag);
+         count += 1;
+     }
++    // Use Ghostty's own iterator: it handles omitted diacritics, high image
++    // IDs, placement IDs, broken runs and retained scrollback consistently.
++    var virtuals = vt.kitty.graphics.unicode.placementIterator(screen.pages.getTopLeft(.screen), null);
++    while (virtuals.next()) |vp| {
++        if (count == capacity) break;
++        const image = activeStorage(state).imageById(vp.image_id) orelse continue;
++        var grid: ?KittyStorage.Placement = null;
++        var candidates = activeStorage(state).placements.iterator();
++        while (candidates.next()) |entry| {
++            if (entry.key_ptr.image_id != vp.image_id or entry.value_ptr.location != .virtual) continue;
++            if (vp.placement_id != 0 and (entry.key_ptr.placement_id.tag != .external or entry.key_ptr.placement_id.id != vp.placement_id)) continue;
++            grid = entry.value_ptr.*;
++            break;
++        }
++        const placement = grid orelse continue;
++        // Automatic grids require pixel metrics; defer these rather than
++        // inventing geometry. Explicit cell grids cover native CLI/TUI output.
++        if (placement.columns == 0 or placement.rows == 0) continue;
++        if (vp.col >= placement.columns or vp.row >= placement.rows) continue;
++        const point = screen.pages.pointFromPin(.screen, vp.pin) orelse continue;
++        const coord = point.coord();
++        const buf = optional_buf orelse {
++            count += 1;
++            continue;
++        };
++        const offset = count * GRAPHICS_PLACEMENT_RECORD_BYTES;
++        @memset(buf[offset..][0..GRAPHICS_PLACEMENT_RECORD_BYTES], 0);
++        writeU32(buf, offset, image.id);
++        writeU32(buf, offset + 4, vp.placement_id);
++        writeU32(buf, offset + 8, imageVersionFor(state, image.id));
++        writeU32(buf, offset + 12, coord.y);
++        writeU32(buf, offset + 16, coord.x);
++        writeU32(buf, offset + 36, image.width);
++        writeU32(buf, offset + 40, image.height);
++        writeU32(buf, offset + 44, @min(vp.width, placement.columns - vp.col));
++        writeU32(buf, offset + 48, vp.height);
++        writeI32(buf, offset + 52, placement.z);
++        writeU32(buf, offset + 56, 2); // virtual fragment, not a pinned placement
++        writeU32(buf, offset + 60, vp.col);
++        writeU32(buf, offset + 64, vp.row);
++        writeU32(buf, offset + 68, placement.columns);
++        writeU32(buf, offset + 72, placement.rows);
++        count += 1;
++    }
+     return @intCast(count);
+ }
+ 
+@@ -672,7 +730,7 @@ fn encodeCell(
+         else => unreachable,
+     } else if (has_bg_style) resolveRgb(style.bg_color, palette) else color.RGB{};
+ 
+-    std.mem.writeInt(u32, out[0..4], cp, .little);
++    std.mem.writeInt(u32, out[0..4], if (cp == 0x10EEEE) 0 else cp, .little);
+     out[4] = fg.r;
+     out[5] = fg.g;
+     out[6] = fg.b;
+@@ -682,7 +740,7 @@ fn encodeCell(
+     out[10] = packFlags(style);
+     out[11] = cellWidth(raw.*);
+     out[12] = (if (has_fg) @as(u8, 1) else 0) | (if (has_bg) @as(u8, 2) else 0);
+-    out[13] = (if (raw.content_tag == .codepoint_grapheme) @as(u8, 1) else 0) |
++    out[13] = (if (raw.content_tag == .codepoint_grapheme and cp != 0x10EEEE) @as(u8, 1) else 0) |
+         (if (raw.hyperlink) @as(u8, 2) else 0);
+     out[14] = 0;
+     out[15] = 0;
+@@ -748,7 +806,7 @@ export fn get_viewport(ptr: usize, buf_ptr: [*]u8) u32 {
+             const width = cellWidth(raw);
+             const color_flags: u8 = (if (has_fg) @as(u8, 1) else 0) | (if (has_bg) @as(u8, 2) else 0);
+ 
+-            std.mem.writeInt(u32, buf_ptr[offset..][0..4], cp, .little);
++            std.mem.writeInt(u32, buf_ptr[offset..][0..4], if (cp == 0x10EEEE) 0 else cp, .little);
+             buf_ptr[offset + 4] = fg.r;
+             buf_ptr[offset + 5] = fg.g;
+             buf_ptr[offset + 6] = fg.b;
+@@ -759,7 +817,7 @@ export fn get_viewport(ptr: usize, buf_ptr: [*]u8) u32 {
+             buf_ptr[offset + 11] = width;
+             buf_ptr[offset + 12] = color_flags;
+             buf_ptr[offset + 13] =
+-                (if (raw.content_tag == .codepoint_grapheme) @as(u8, 1) else 0) |
++                (if (raw.content_tag == .codepoint_grapheme and cp != 0x10EEEE) @as(u8, 1) else 0) |
+                 (if (raw.hyperlink) @as(u8, 2) else 0);
+             buf_ptr[offset + 14] = 0;
+             buf_ptr[offset + 15] = 0;
+@@ -976,7 +1034,7 @@ export fn graphics_image_count(ptr: usize) u32 {
+ }
+ 
+ export fn graphics_placement_count(ptr: usize) u32 {
+-    return @intCast(activeStorage(stateFromPtr(ptr)).placements.count());
++    return graphicsPlacements(stateFromPtr(ptr), null, GRAPHICS_MAX_RECORDS);
+ }
+ 
+ export fn graphics_bytes_used(ptr: usize) u32 {

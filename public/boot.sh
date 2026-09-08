@@ -2,9 +2,8 @@
 # Executed inside the emulated guest only. /mnt is v86's existing host9p mount.
 set -eu
 export HOME=/root XDG_CONFIG_HOME=/root/.config XDG_DATA_HOME=/root/.local/share XDG_CACHE_HOME=/root/.cache
-# wterm supports direct Kitty graphics, not native Unicode placements. Do not
-# advertise xterm-kitty; the browser previews the provider PNG without CLI patches.
-export TERM=xterm-256color GOMAXPROCS=1 GOGC=50
+# The terminal core renders native Kitty Unicode placements inline.
+export TERM=xterm-kitty GOMAXPROCS=1 GOGC=50
 export PATH=/tmp:$PATH
 mkdir -p "$XDG_CONFIG_HOME/term-llm" /mnt/workspace
 ln -s /mnt/workspace /workspace

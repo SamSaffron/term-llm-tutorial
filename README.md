@@ -14,7 +14,7 @@ All three modes run the real native term-llm CLI inside v86 Linux. Files, comman
 
 ## Run locally
 
-Requirements: Node22+ (tested with26), npm, Go compatible with `guest/go.mod` (tested with1.27), and Python3. Modern desktop browser; GPU only needed for real-model modes.
+Build requirements: Linux x86_64, Node24+ (tested with26), npm, Git, curl, tar, Go compatible with `guest/go.mod` (tested with1.27), and Python3. Modern desktop browser; GPU only needed for real-model modes.
 
 ```sh
 npm ci
@@ -42,7 +42,7 @@ The bootstrap downloads hash-pinned existing public runtime binaries and require
 - `scripts/stage-hosting.mjs`, `stage-cdn.mjs`: explicit runtime allowlist and content-hashed asset URLs.
 - `hosting/browser-linux-lab*.conf`: scoped nginx templates; adapt paths/includes for your host. Personal SSH/deployment configuration is not in this repository.
 
-The terminal uses **wterm 0.5.0 with its Ghostty core**, DOM text rendering and Kitty graphics. The old artifact agent, preview watcher and workspace mailbox have been removed.
+The terminal uses **wterm with its Ghostty core**, built from pinned source with the reviewed Kitty Unicode placement patch in `patches/`. See [terminal build and verification](docs/inline-images.md). The old artifact agent, preview watcher and workspace mailbox have been removed.
 
 ## Tests
 
@@ -124,14 +124,16 @@ term-llm image "A pelican riding a bike." -o pelican.png
 This is the normal native command, not a tutorial extension. `image.provider`
 selects the endpoint: `janus`, `demo`, or disabled `images-off`. Switching to Janus
 updates native configuration before loading the model. No `--generate`, `--demo`
-or `--seed` flags are added. The provider chooses the seed; the preview shows it.
-The CLI saves the PNG, and the guide shows its preview/download. There is no
+or `--seed` flags are added. The provider chooses the seed.
+The CLI saves the PNG and displays it inline in the terminal. The sidebar stays on your lesson. There is no
 custom `.png.json` sidecar. Native `--provider`, stdin, output and help work normally.
 
-The pinned wterm version supports direct Kitty images but **not Unicode virtual
-placements emitted by the native CLI**. The guest therefore does not advertise
-`xterm-kitty`: preview/download is used rather than intercepting commands or
-patching terminal output. This avoids a reproduced terminal-core crash.
+`scripts/build-wterm.sh` rebuilds the terminal's WASM core and DOM renderer to
+support the native CLI's Kitty Unicode placements. `TERM=xterm-kitty` is enabled;
+there is no image-command wrapper, sidebar image output or byte-stream rewriting.
+The build uses ReleaseSafe and one resize owner; repeated images and resizing
+have browser coverage. Full details and remaining protocol limits are in
+[docs/inline-images.md](docs/inline-images.md).
 
 Janus and Qwen/Bonsai workers are never kept resident together. **Reload text** releases
 Janus and restores the selected LLM; files and lesson progress survive. Janus

@@ -30,7 +30,7 @@ let phase='idle', bootTimer, cliSerial='', terminalLive=false;
 function controls(){$('stop').disabled=!worker&&!vm;}
 function stage(name,label){phase=name;document.body.dataset.phase=name;status(label);loadingLine($('progress'),true);}
 function resetWorker(reason){worker?.terminate();worker=null;loaded=false;for(const p of pending.values()){clearTimeout(p.timer);p.reject(Error(reason));}pending.clear();controls();}
-async function fail(kind,error){if(failing)return;failing=true;clearTimeout(bootTimer);started=false;terminalLive=false;resetWorker(kind);images.reset();lastImageRequest='';lastDemoImage='';web.reset();await vm?.destroy();vm=null;ready=false;booting=false;phase='failed';document.body.dataset.phase=phase;$('workspace').hidden=true;$('launch').hidden=false;$('boot').disabled=false;$('boot').textContent=kind==='Stopped'?'Start again':'Try again';$('context').disabled=false;$('model').disabled=false;launchChoice.reset();$('image-start-guide').hidden=true;loadingLine($('progress'),false);status(`${kind}: ${error.message}. ${kind.includes('Model')?'Choose Simulator for a no-GPU tutorial, or use desktop Chrome with WebGPU and a smaller context. ':''}Retry starts a fresh Linux guest; guest files are lost.`);failing=false;}
+async function fail(kind,error){if(failing)return;failing=true;clearTimeout(bootTimer);started=false;terminalLive=false;resetWorker(kind);images.reset();lastImageRequest='';web.reset();await vm?.destroy();vm=null;ready=false;booting=false;phase='failed';document.body.dataset.phase=phase;$('workspace').hidden=true;$('launch').hidden=false;$('boot').disabled=false;$('boot').textContent=kind==='Stopped'?'Start again':'Try again';$('context').disabled=false;$('model').disabled=false;launchChoice.reset();loadingLine($('progress'),false);status(`${kind}: ${error.message}. ${kind.includes('Model')?'Choose Simulator for a no-GPU tutorial, or use desktop Chrome with WebGPU and a smaller context. ':''}Retry starts a fresh Linux guest; guest files are lost.`);failing=false;}
 function workerCall(type,request){
  if(!worker){worker=new Worker(selectedModel==='simulator'?'simulator-worker.js':selectedModel==='qwen'?'inference-worker.js':selectedModel==='bonsai'?'bonsai-worker.js':'gemma-worker.js',{type:'module'});worker.onmessage=({data})=>{
   if(data.fatal){resetWorker(data.fatal);$('effective').textContent=`${modelNames[selectedModel]} unavailable · GPU device lost`;status(data.fatal);return;}
@@ -59,13 +59,10 @@ const images=mountImagePanel({
   textReloading=true;
   try{const result=await workerCall('load',{context:selectedContext,backend:selectedModel});loaded=true;$('allocation').textContent=JSON.stringify(result,null,2);$('effective').textContent=selectedModel==='simulator'?'SIMULATOR · scripted responses · real terminal, files and tools':`${modelNames[selectedModel]} · ${result.precision} · ${result.context/1024}K context limit`;status('Text ready · Linux files retained');}
   finally{textReloading=false;loadingLine($('progress'),false);}
-  $('image-panel').append($('image-result'));$('image-start-guide').hidden=true;
  },textLabel:()=>modelNames[selectedModel],selectProvider:setImageProvider,
 });
-let textReloading=false,lastImageRequest='',lastDemoImage='';
+let textReloading=false,lastImageRequest='';
 const launchChoice=mountLaunchChoice($);
-$('image-copy').onclick=()=>navigator.clipboard.writeText($('image-example').textContent).catch(e=>status(`Copy failed: ${e.message}`));
-$('image-controls-link').onclick=()=>{$('image-panel').open=true;$('image-panel').scrollIntoView({behavior:'smooth'});};
 $('stop').onclick=()=>fail('Stopped',Error('GPU and Linux released'));
 terminal.onData(data=>{if(terminalLive)vm?.serial0_send(data);});
 $('boot').onclick=async()=>{
@@ -93,11 +90,9 @@ async function loadAndStart(){
   stage('model',selectedModel==='simulator'?'Starting simulator · no model download':`Loading ${modelNames[selectedModel]} · checking local WebGPU`);
   const result=await workerCall('load',{context:selectedContext,backend:selectedModel});loaded=true;$('allocation').textContent=JSON.stringify(result,null,2);$('effective').textContent=selectedModel==='simulator'?'SIMULATOR · scripted responses · real terminal, files and tools':`${modelNames[selectedModel]} · ${result.precision} · ${result.context/1024}K context limit`;$('allocation').textContent=JSON.stringify(result,null,2);
  },prepareImages:async()=>{
-  $('image-start-guide').hidden=false;
   images.prepare(); // No model load: consent stays in the existing panel.
  } });}catch(e){await fail('Model unavailable',e);return;}
  terminal.reset();terminalLive=true;cliSerial='';started=true;phase='ready';document.body.dataset.phase=phase;loadingLine($('progress'),false);$('launch').hidden=true;$('workspace').hidden=false;status(selectedImageSupport==='janus'?'Linux shell · enable Janus below':'Linux shell · start with the lesson on the right');controls();resizeTerminal();vm.serial0_send('\n');terminal.focus();
- if(selectedImageSupport==='demo'){$('image-start-guide').hidden=false;$('image-example').textContent='term-llm image cat -o cat.png';$('image-start-status').textContent='Demo provider · canned drawings';}
  if(selectedImageSupport==='janus')$('image-panel').scrollIntoView({behavior:'instant'});
 }
 let resizeTimer;function resizeTerminal(){clearTimeout(resizeTimer);resizeTimer=setTimeout(async()=>{const container=$('terminal');if(container.clientWidth<40||container.clientHeight<40)return;
@@ -126,8 +121,6 @@ async function installGuest(){
 async function poll(){
  if(!ready||polling)return;polling=true;const target=vm;
  try{
-  let demo;try{const raw=await target.read_file('image-demo-result.json');if(raw.length<128*1024)demo=JSON.parse(dec.decode(raw));}catch{}
-  if(demo?.id&&demo.id!==lastDemoImage){lastDemoImage=demo.id;images.preview(demo,'data:image/png;base64,'+demo.png);}
   let image;try{const bytes=await target.read_file('image-request.json');if(bytes.length<=8192)image=JSON.parse(dec.decode(bytes));}catch{}
   if(typeof image?.id==='string'&&image.id!==lastImageRequest){
    lastImageRequest=image.id;

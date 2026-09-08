@@ -83,19 +83,19 @@ uses the existing correlated 9p mailbox; the response must decode to a 384×384 
 The native CLI owns saving/output. A canceled, disabled, or failed Janus request
 never returns a demo image. There are no custom image CLI flags or sidecars.
 
-The browser previews the actual provider PNG and offers download. Native Kitty
-Unicode placements are unsupported by wterm 0.5.0 and reproduced a WASM core
-crash, so the guest keeps `TERM=xterm-256color`, not `xterm-kitty`. We do not patch
-the CLI or rewrite its terminal output to hide that incompatibility.
+The native CLI displays its PNG inline through Kitty Unicode placements. The
+sidebar contains lessons only; preview/download DOM and demo preview mailbox
+have been removed. The terminal core/renderer, not the CLI, are patched and built
+from pinned source; see [inline image details](docs/inline-images.md).
 
 ## Verification
 
 Shared authenticated NVIDIA/Lovelace browser, cached pinned weights, no browser
 flags or service changes. Local hashed-staging routing only; not deployed.
 - Plain native `term-llm image "A cat riding a bicycle." -o generated-cat.png`
-  generated a genuine 384×384 PNG; guest file and preview/download bytes matched.
+  generated a genuine 384×384 PNG; the saved file and actual terminal pixels were checked.
 - Native `config get image.provider` returned `janus` after enabling.
-- Explicit demo-provider response matches the bundled demo PNG. Janus output is
+- Launch-selected Demo and a repeated image survive resize/scrollback. The demo-provider response matches the bundled demo PNG. Janus output is
   distinct; Janus errors and even a canned PNG supplied as a Janus response are rejected.
 - Default launch requested no Janus runtime/weights before consent.
 - Cancel/unload then plain `image cat` returned an error without an output file.
