@@ -21,15 +21,15 @@ test('independent selections: default text boot and Janus preparation never impl
  assert.equal($('image-size-hint').hidden,true);
  for(const model of ['qwen','simulator']){
   $('model').value=model;
-  for(const support of ['off','janus']){
+  for(const support of ['off','demo','janus']){
    $('image-support').value=support;change('image-support');
    assert.equal($('model').value,model);assert.equal(choice.allowed,true);
    assert.equal($('image-consent').checked,false);
    await startProvider(choice.imageSupport,{startText:()=>calls.push(model),prepareImages:()=>calls.push('prepare')});
-   assert.equal($('image-size-hint').hidden,support==='off');
+   assert.equal($('image-size-hint').hidden,support!=='janus');
   }
  }
- assert.deepEqual(calls,['qwen','prepare','simulator','prepare']);
+ assert.deepEqual(calls,['qwen','qwen','prepare','simulator','simulator','prepare']);
  choice.start();assert.equal(choice.allowed,false);assert.equal($('image-support').disabled,true);
  assert.equal(choice.imageSupport,'janus');assert.equal($('model').value,'simulator');
  choice.reset();assert.equal(choice.allowed,true);assert.equal($('image-support').disabled,false);
@@ -38,7 +38,7 @@ test('Janus preparation opens existing consent controls without a worker and per
  const {$}=fixture(),order=[],oldDocument=globalThis.document;
  globalThis.document={getElementById:$};
  try{
-  const panel=mountImagePanel({textBusy:()=>false,suspendText:()=>assert.fail('no model to release'),resumeText:async()=>order.push('selected LLM'),textLabel:()=> 'Qwen3 8B'});
+  const panel=mountImagePanel({textBusy:()=>false,suspendText:()=>assert.fail('no model to release'),resumeText:async()=>order.push('selected LLM'),textLabel:()=> 'Qwen3 8B',selectProvider:async()=>{}});
   panel.prepare();assert.equal(panel.state,'off');assert.equal(panel.blocksText,true);
   assert.equal($('image-panel').open,true);assert.equal($('image-enable').disabled,true);
   assert.equal($('image-text').disabled,false);
@@ -55,10 +55,10 @@ test('panel refuses unconsented/duplicate enables; releases images before text a
   terminate(){order.push('terminate image');}
  };
  try{
-  const panel=mountImagePanel({textBusy:()=>false,suspendText:()=>order.push('suspend text'),resumeText:async()=>order.push('load selected text'),textLabel:()=> 'Qwen3 8B'});
+  const panel=mountImagePanel({textBusy:()=>false,suspendText:()=>order.push('suspend text'),resumeText:async()=>order.push('load selected text'),textLabel:()=> 'Qwen3 8B',selectProvider:async provider=>{assert.equal(provider,'janus');order.push('configure Janus');}});
   await panel.enable();assert.deepEqual(order,[]);
   $('image-consent').checked=true;await Promise.all([panel.enable(),panel.enable()]);
-  assert.deepEqual(order,['suspend text','image worker']);assert.equal(panel.blocksText,true);
+  assert.deepEqual(order,['suspend text','configure Janus','image worker']);assert.equal(panel.blocksText,true);
   await $('image-text').onclick();assert.deepEqual(order.slice(-2),['terminate image','load selected text']);
   assert.equal(panel.blocksText,false);panel.reset();assert.equal($('image-consent').checked,false);
  }finally{globalThis.document=oldDocument;globalThis.Worker=oldWorker;}

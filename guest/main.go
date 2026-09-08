@@ -126,18 +126,17 @@ func dataRequest(data []byte) json.RawMessage {
 	return e.Request
 }
 func main() {
-	if len(os.Args) > 1 && os.Args[1] == "image-demo" {
-		os.Exit(runImageDemo(os.Args[2:], os.Stdout, os.Stderr))
-	}
 	dir := "/mnt"
 	if len(os.Args) > 1 {
 		dir = os.Args[1]
 	}
 	go watchWeb(dir)
 	go watchGeometry(dir)
+	go watchImageProvider(dir)
 	b := &bridge{dir: dir}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v1/chat/completions", b.complete)
+	mux.HandleFunc("/images/", b.images)
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) { fmt.Fprint(w, "guest bridge ready") })
 	log.Print("guest bridge listening on 127.0.0.1:8080 (9p mailbox only)")
 	log.Fatal((&http.Server{Addr: "127.0.0.1:8080", Handler: mux, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 200 * time.Second, MaxHeaderBytes: 8192}).ListenAndServe())

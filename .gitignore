@@ -43,3 +43,7 @@ hosting/preview/
 /node_modules
 public/image-runtime/
 public/licenses/
+
+.native-cli/
+public/assets/term-llm.build
+public/assets/term-llm.tmp

@@ -34,7 +34,7 @@ export class ImageGenerator {
   }catch(e){if(epoch===this.epoch)this.reset();throw e;}
  }
  async generate(request){
-  if(this.state!=='ready')throw Error('Open Optional image generation and enable Janus first. Canned images are separate.');
+  if(this.state!=='ready')throw Error('Janus is not loaded. Enable it in the image controls.');
   request=imageRequest(request);const epoch=this.epoch;this.setState('generating');
   try{const result=await this.call('generate',request);if(epoch===this.epoch)this.setState('ready');return result;}
   catch(e){if(epoch===this.epoch)this.reset();throw e;}

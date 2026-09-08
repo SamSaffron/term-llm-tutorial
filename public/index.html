@@ -7,7 +7,7 @@
  <p class="intro">Your terminal on the left. A little guidance on the right.<br>Learn term-llm without installing anything.</p>
  <div id="launch-controls">
  <div class="launch-selects"><div><label id="model-label" for="model">LLM</label><select id="model"><option value="qwen" selected>Qwen3 8B · real AI · WebGPU</option><option value="simulator">Simulator · scripted tutorial · no GPU</option></select></div>
- <div><label for="image-support">Image support</label><select id="image-support" aria-describedby="image-size-hint"><option value="off" selected>Off</option><option value="janus">Janus</option></select></div></div>
+ <div><label for="image-support">Image support</label><select id="image-support" aria-describedby="image-size-hint"><option value="off" selected>Off</option><option value="demo">Demo · canned drawings</option><option value="janus">Janus</option></select></div></div>
  <p id="image-size-hint" class="model-note" hidden>~3 GB download · requires WebGPU</p><p id="capability-note" class="model-note"></p><button id="boot" disabled>Start tutorial <span aria-hidden="true">↗</span></button>
  <div id="launch-feedback"><div id="status" role="status" aria-live="polite"></div><div id="progress" role="progressbar" aria-labelledby="status" aria-valuemin="0" aria-valuemax="1" hidden><span></span></div></div></div>
  <ol class="tutorial-path"><li>01 · Explore the shell</li><li>02 · Ask, act, connect</li><li>03 · Have a conversation</li></ol>
@@ -22,22 +22,21 @@
  <nav class="tabs" role="tablist" aria-label="Workspace"><button id="tab-chat" role="tab" aria-controls="chat-pane" aria-selected="true">Terminal</button><button id="tab-guide" role="tab" aria-controls="guide-pane" aria-selected="false">Guide</button></nav>
  <section class="pane" id="chat-pane" aria-label="Real Linux terminal"><h2>Terminal <span>your commands · your workspace</span></h2><div id="terminal" aria-label="Interactive Linux terminal"></div></section>
  <aside class="pane" id="guide-pane" aria-label="Tutorial guidance"><section id="image-start-guide" hidden>
-  <p class="lesson-count">LOCAL IMAGE GENERATION</p><h2>Your first PNG</h2>
+  <p class="lesson-count">IMAGE OUTPUT</p><h2>Your first PNG</h2>
   <p id="image-start-status" role="status" aria-live="polite"></p>
-  <p>Once Janus is ready, run this in the Linux shell:</p>
-  <div class="lesson-task"><pre>term-llm image --generate "A pelican riding a bike." --seed 1 -o pelican.png</pre><button id="image-copy" class="copy-command">Copy command</button></div>
-  <p>Saves <code>pelican.png</code> and its metadata in your workspace and displays the PNG in the terminal.</p>
+  <p>Run image commands in the Linux shell:</p>
+  <div class="lesson-task"><pre id="image-example">term-llm image "A pelican riding a bike." -o pelican.png</pre><button id="image-copy" class="copy-command">Copy command</button></div>
+  <p>Saves <code>pelican.png</code> in your workspace with a preview here.</p>
   <button id="image-controls-link">Image controls &amp; download ↓</button><p>Use the controls below the terminal to cancel, unload, retry, or reload your selected text provider. Your files and lesson progress stay intact.</p>
  </section><div id="lesson"></div></aside>
  <details id="image-panel"><summary>Optional image generation · real local Janus · ~3 GB</summary>
-  <p>Separate from the six canned image Easter eggs. No image model or runtime downloads until you enable it. Requires WebGPU and several GB of free GPU memory. Generation is local; prompts are not sent to a server. Downloads come from Hugging Face.</p>
-  <p>Enabling releases the text worker (including Qwen) before Janus loads. Text requests pause; your Linux files and tutorial progress remain. Cancel / unload releases Janus, not its browser cache. <strong>Reload text</strong> releases Janus before reloading your chosen text provider. Simulator stays scripted for text; its image generation is real.</p>
-  <div id="panel-image-consent"><label id="image-consent-label"><input id="image-consent" type="checkbox"> I agree to the <a href="licenses/Janus-LICENSE-MODEL.txt" target="_blank" rel="noopener">DeepSeek Model License (full copy)</a>, including §5 and all Attachment A use restrictions, as binding terms for my use of this model. I accept responsibility for generated output and consent to download ~3 GB of weights plus tokenizer/runtime.</label></div>
+  <p>Janus generates locally. Enabling it pauses text and downloads ~3 GB. Your files stay intact.</p>
+  <div id="panel-image-consent"><label id="image-consent-label"><input id="image-consent" type="checkbox"> I agree to the <a href="licenses/Janus-LICENSE-MODEL.txt" target="_blank" rel="noopener">DeepSeek Model License (full copy)</a>, including §5 and all Attachment A use restrictions, as binding terms for my use of this model. I consent to the ~3 GB download.</label></div>
   <div class="image-actions"><button id="image-enable" disabled>Accept &amp; enable Janus (~3 GB)</button><button id="image-cancel" disabled>Cancel / unload Janus</button><button id="image-text" disabled>Reload text</button></div>
   <p id="image-status" role="status" aria-live="polite">Off · no image downloads until you accept and enable.</p>
   <p>Return to the shell with <code>/quit</code>, then:</p>
-  <pre>term-llm image --generate "A pelican riding a bike." --seed 1 -o pelican.png</pre>
-  <p>Seed is optional (a random seed is recorded when omitted). Saves PNG + <code>.png.json</code> prompt/seed metadata in your current directory and displays inline in the terminal. Existing <code>term-llm image cat</code> (also dog, elephant, rabbit, fox, owl) remains explicitly canned. Nothing is substituted on failure. Images may be inaccurate or inappropriate; inspect them before sharing. Download files before shutting down.</p>
+  <pre>term-llm image "A pelican riding a bike." -o pelican.png</pre>
+  <p>The native CLI saves the PNG; preview/download appears above. The selected provider handles every image command. Demo returns canned drawings; Janus generates or reports an error. No fallback. Download images before shutting down.</p>
   <figure id="image-result" hidden><img id="image-preview" width="384" height="384" alt="Latest genuine locally generated Janus image"><figcaption id="image-caption"></figcaption><a id="image-download">Download PNG</a></figure>
  </details>
  <p class="workspace-hint">Type commands in the terminal. Back / Next never run commands or reset your files. In chat, /quit returns to the shell.</p>

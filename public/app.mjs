@@ -30,7 +30,7 @@ let phase='idle', bootTimer, cliSerial='', terminalLive=false;
 function controls(){$('stop').disabled=!worker&&!vm;}
 function stage(name,label){phase=name;document.body.dataset.phase=name;status(label);loadingLine($('progress'),true);}
 function resetWorker(reason){worker?.terminate();worker=null;loaded=false;for(const p of pending.values()){clearTimeout(p.timer);p.reject(Error(reason));}pending.clear();controls();}
-async function fail(kind,error){if(failing)return;failing=true;clearTimeout(bootTimer);started=false;terminalLive=false;resetWorker(kind);images.reset();lastImageRequest='';web.reset();await vm?.destroy();vm=null;ready=false;booting=false;phase='failed';document.body.dataset.phase=phase;$('workspace').hidden=true;$('launch').hidden=false;$('boot').disabled=false;$('boot').textContent=kind==='Stopped'?'Start again':'Try again';$('context').disabled=false;$('model').disabled=false;launchChoice.reset();$('image-start-guide').hidden=true;loadingLine($('progress'),false);status(`${kind}: ${error.message}. ${kind.includes('Model')?'Choose Simulator for a no-GPU tutorial, or use desktop Chrome with WebGPU and a smaller context. ':''}Retry starts a fresh Linux guest; guest files are lost.`);failing=false;}
+async function fail(kind,error){if(failing)return;failing=true;clearTimeout(bootTimer);started=false;terminalLive=false;resetWorker(kind);images.reset();lastImageRequest='';lastDemoImage='';web.reset();await vm?.destroy();vm=null;ready=false;booting=false;phase='failed';document.body.dataset.phase=phase;$('workspace').hidden=true;$('launch').hidden=false;$('boot').disabled=false;$('boot').textContent=kind==='Stopped'?'Start again':'Try again';$('context').disabled=false;$('model').disabled=false;launchChoice.reset();$('image-start-guide').hidden=true;loadingLine($('progress'),false);status(`${kind}: ${error.message}. ${kind.includes('Model')?'Choose Simulator for a no-GPU tutorial, or use desktop Chrome with WebGPU and a smaller context. ':''}Retry starts a fresh Linux guest; guest files are lost.`);failing=false;}
 function workerCall(type,request){
  if(!worker){worker=new Worker(selectedModel==='simulator'?'simulator-worker.js':selectedModel==='qwen'?'inference-worker.js':'gemma-worker.js',{type:'module'});worker.onmessage=({data})=>{
   if(data.diagnostic){$('model-raw').textContent=JSON.stringify(data.diagnostic,null,2);return;}
@@ -39,6 +39,18 @@ function workerCall(type,request){
  };worker.onerror=e=>{resetWorker('Worker crashed: '+e.message+'; existing guest file preserved.');};}
  const id=++seq;return new Promise((resolve,reject)=>{const timer=setTimeout(()=>{resetWorker('Hard model deadline reached; existing guest file preserved. Download your checklist before restarting.');},type==='load'?600000:180000);pending.set(id,{resolve,reject,timer});worker.postMessage({id,type,request});controls();});
 }
+async function setImageProvider(provider){
+ const target=vm;if(!target||!ready)throw Error('Start the tutorial first');
+ const id=crypto.randomUUID();
+ await target.create_file('image-provider.json',enc.encode(JSON.stringify({id,provider})));
+ const deadline=Date.now()+45000;
+ while(vm===target&&Date.now()<deadline){
+  let result;try{result=JSON.parse(dec.decode(await target.read_file('image-provider-status.json')));}catch{}
+  if(result?.id===id){if(result.error)throw Error(result.error);return;}
+  await new Promise(r=>setTimeout(r,100));
+ }
+ throw Error('Image provider configuration timed out');
+}
 const images=mountImagePanel({
  textBusy:()=>pending.size>0||textReloading,
  suspendText:()=>{resetWorker('Text paused for Janus; reload text to continue.');$('effective').textContent=`${modelNames[selectedModel]} text paused · Janus image mode`;},
@@ -46,12 +58,12 @@ const images=mountImagePanel({
   textReloading=true;
   try{const result=await workerCall('load',{context:selectedContext,backend:selectedModel});loaded=true;$('effective').textContent=selectedModel==='simulator'?'SIMULATOR · scripted responses · real terminal, files and tools':`${modelNames[selectedModel]} · ${result.precision} · ${result.context/1024}K context limit`;status('Text ready · Linux files retained');}
   finally{textReloading=false;}
-  $('image-start-guide').hidden=true;
- },textLabel:()=>modelNames[selectedModel],
+  $('image-panel').append($('image-result'));$('image-start-guide').hidden=true;
+ },textLabel:()=>modelNames[selectedModel],selectProvider:setImageProvider,
 });
-let textReloading=false,lastImageRequest='';
+let textReloading=false,lastImageRequest='',lastDemoImage='';
 const launchChoice=mountLaunchChoice($);
-$('image-copy').onclick=()=>navigator.clipboard.writeText('term-llm image --generate "A pelican riding a bike." --seed 1 -o pelican.png').catch(e=>status(`Copy failed: ${e.message}`));
+$('image-copy').onclick=()=>navigator.clipboard.writeText($('image-example').textContent).catch(e=>status(`Copy failed: ${e.message}`));
 $('image-controls-link').onclick=()=>{$('image-panel').open=true;$('image-panel').scrollIntoView({behavior:'smooth'});};
 $('stop').onclick=()=>fail('Stopped',Error('GPU and Linux released'));
 terminal.onData(data=>{if(terminalLive)vm?.serial0_send(data);});
@@ -84,6 +96,7 @@ async function loadAndStart(){
   images.prepare(); // No model load: consent stays in the existing panel.
  } });}catch(e){await fail('Model unavailable',e);return;}
  terminal.reset();terminalLive=true;cliSerial='';started=true;phase='ready';document.body.dataset.phase=phase;loadingLine($('progress'),false);$('launch').hidden=true;$('workspace').hidden=false;status(selectedImageSupport==='janus'?'Linux shell · enable Janus below':'Linux shell · start with the lesson on the right');controls();resizeTerminal();vm.serial0_send('\n');terminal.focus();
+ if(selectedImageSupport==='demo'){$('image-start-guide').hidden=false;$('image-example').textContent='term-llm image cat -o cat.png';$('image-start-status').textContent='Demo provider · canned drawings';}
  if(selectedImageSupport==='janus')$('image-panel').scrollIntoView({behavior:'instant'});
 }
 let resizeTimer;function resizeTerminal(){clearTimeout(resizeTimer);resizeTimer=setTimeout(async()=>{const container=$('terminal');if(container.clientWidth<40||container.clientHeight<40)return;
@@ -103,8 +116,8 @@ window.visualViewport?.addEventListener('resize',resizeTerminal);
 document.fonts.ready.then(resizeTerminal);
 async function installGuest(){
  stage('setup','Installing real CLI · transferring guest tools');
- for(const [name,url] of [['term-llm','assets/term-llm'],['guest-bridge','assets/guest-bridge'],['git','assets/git'],['picnic-mcp','assets/picnic-mcp'],['zsh-root.tar','assets/zsh-root.tar.gz'],['guest-config.yaml','guest-config.yaml'],['boot.sh','boot.sh'],['term-llm-launch.sh','term-llm-launch.sh']]){
-  const target=vm;const r=await fetch(url,{signal:AbortSignal.timeout(120000)});if(vm!==target)throw Error('Guest stopped');if(!r.ok)throw Error(`${url}: HTTP ${r.status}`);let bytes=new Uint8Array(await (name==='zsh-root.tar'?new Response(r.body.pipeThrough(new DecompressionStream('gzip'))):r).arrayBuffer());if(name==='guest-config.yaml')bytes=enc.encode(dec.decode(bytes).replace('context_window: 4096',`context_window: ${selectedContext}`).replace(modelIds.qwen,modelIds[selectedModel]).replace('__WEB_BASE__',web.base));if(vm!==target)throw Error('Guest stopped');await target.create_file(name,bytes);
+ for(const [name,url] of [['term-llm','assets/term-llm'],['guest-bridge','assets/guest-bridge'],['git','assets/git'],['picnic-mcp','assets/picnic-mcp'],['zsh-root.tar','assets/zsh-root.tar.gz'],['guest-config.yaml','guest-config.yaml'],['boot.sh','boot.sh']]){
+  const target=vm;const r=await fetch(url,{signal:AbortSignal.timeout(120000)});if(vm!==target)throw Error('Guest stopped');if(!r.ok)throw Error(`${url}: HTTP ${r.status}`);let bytes=new Uint8Array(await (name==='zsh-root.tar'?new Response(r.body.pipeThrough(new DecompressionStream('gzip'))):r).arrayBuffer());if(name==='guest-config.yaml')bytes=enc.encode(dec.decode(bytes).replace('context_window: 4096',`context_window: ${selectedContext}`).replace(modelIds.qwen,modelIds[selectedModel]).replace('__WEB_BASE__',web.base).replace('__IMAGE_PROVIDER__',selectedImageSupport==='off'?'images-off':selectedImageSupport));if(vm!==target)throw Error('Guest stopped');await target.create_file(name,bytes);
  }
  await vm.create_file('web-base',enc.encode(web.base));
  vm.serial0_send('. /mnt/boot.sh\n');
@@ -112,6 +125,8 @@ async function installGuest(){
 async function poll(){
  if(!ready||polling)return;polling=true;const target=vm;
  try{
+  let demo;try{const raw=await target.read_file('image-demo-result.json');if(raw.length<128*1024)demo=JSON.parse(dec.decode(raw));}catch{}
+  if(demo?.id&&demo.id!==lastDemoImage){lastDemoImage=demo.id;images.preview(demo,'data:image/png;base64,'+demo.png);}
   let image;try{const bytes=await target.read_file('image-request.json');if(bytes.length<=8192)image=JSON.parse(dec.decode(bytes));}catch{}
   if(typeof image?.id==='string'&&image.id!==lastImageRequest){
    lastImageRequest=image.id;

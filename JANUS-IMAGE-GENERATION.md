@@ -64,75 +64,46 @@ No concrete license restriction blocks this implementation. We do not infer
 that local browser execution waives these obligations or that the checkbox is a
 technical content filter. No new content moderation capability is claimed.
 
-## Guest boundary and lifecycle
+## Native provider boundary
 
-The existing `term-llm` guest launcher still dispatches only `image` to the guest
-bridge. `--generate` selects a distinct bounded request/response mailbox; without
-it the six canned illustrations retain their labels and behavior. All other
-commands execute the stock upstream binary unchanged. There is no patch to the
-native CLI and no automatic synthetic fallback.
+Clean upstream CLI: `ba07b58441a660e3f279837851a8d32eb948f083` (PR1120).
+`/tmp/term-llm` is the actual binary, not a wrapper. Normal `term-llm image`
+uses `image.provider` and the named OpenAI-compatible configurations:
+- `demo`: `/images/demo/v1/images/generations`, model `demo`, exact canned PNGs.
+- `janus`: `/images/janus/v1/images/generations`, model `Janus-Pro-1B`, real browser inference or an error.
+- `images-off`: `/images/off/v1/images/generations`, always an explicit disabled error.
 
-A guest image request is limited to 2,000 prompt bytes, an optional uint32 seed,
-and one active request. The browser rejects requests until explicitly enabled.
-The response is bounded to 2 MiB, correlated by ID, checked for prompt/seed match,
-and decoded/validated as a 384×384 PNG before being saved and Kitty-encoded.
-The sidecar carries prompt, seed, model ID and revision. Ordinary browser text
-requests remain on their existing mailbox, and explicitly fail while paused.
+The browser's enable action updates native configuration via a bounded, fixed-name
+configuration channel before loading Janus. The guest bridge invokes the native
+`config set image.provider` command with an allowlisted value; it never executes
+model-supplied commands. Initial selection is written into the guest config at boot.
 
-The panel serializes model switching: no active text request may be interrupted
-by enabling images; text worker termination precedes image worker creation;
-image termination precedes text reload. Worker termination aborts model fetches
-and all sessions together. Saved guest files, tutorial step/navigation and
-conversations are not destroyed by switching. Only the full existing shutdown
-path destroys Linux. Consent is not persisted and resets on shutdown.
+Requests are bounded to 8 KiB, prompts to 2000 bytes, and one image per request. Janus
+uses the existing correlated 9p mailbox; the response must decode to a 384×384 PNG.
+The native CLI owns saving/output. A canceled, disabled, or failed Janus request
+never returns a demo image. There are no custom image CLI flags or sidecars.
 
-Seeded Mulberry32 replaces `Math.random` **only in the dedicated worker during
-sampling**, then restores it. Transformers.js 3.8.1's multinomial sampler uses
-that function. This is reproducible on the tested runtime/GPU, not a guarantee
-of identical floating-point results on all hardware or future runtimes.
+The browser previews the actual provider PNG and offers download. Native Kitty
+Unicode placements are unsupported by wterm 0.5.0 and reproduced a WASM core
+crash, so the guest keeps `TERM=xterm-256color`, not `xterm-kitty`. We do not patch
+the CLI or rewrite its terminal output to hide that incompatibility.
 
-## Actual verification (not a feasibility claim)
+## Verification
 
-Shared authenticated browser, NVIDIA Lovelace, no `shader-f16`; no flags changed,
-no browser/service restart, no unrelated tabs closed. Tests intercept only local
-static build/staging files under `https://term-llm.com/learn/` in their own tab.
-No generation or CLI responses are mocked. Existing pinned browser caches are
-reused. Nothing has been pushed or deployed by these tests.
+Shared authenticated NVIDIA/Lovelace browser, cached pinned weights, no browser
+flags or service changes. Local hashed-staging routing only; not deployed.
+- Plain native `term-llm image "A cat riding a bicycle." -o generated-cat.png`
+  generated a genuine 384×384 PNG; guest file and preview/download bytes matched.
+- Native `config get image.provider` returned `janus` after enabling.
+- Explicit demo-provider response matches the bundled demo PNG. Janus output is
+  distinct; Janus errors and even a canned PNG supplied as a Janus response are rejected.
+- Default launch requested no Janus runtime/weights before consent.
+- Cancel/unload then plain `image cat` returned an error without an output file.
+- Simulator text reload, preserved PNG/lesson progress, real zsh completion and
+  shutdown passed. Images-first -> real Janus -> real Qwen3 8B also passed on the new native CLI,
+  with no text runtime requested before Janus consent and no worker overlap.
 
-- JS build + boundary tests; guest Go build/tests, including stale response ID/error,
-  timeout/locking, seed parsing, PNG validation and existing six canned/Kitty tests.
-- Simulator tutorial launched normally; real stock CLI text answers worked before
-  images, explicitly failed while paused, and worked after Reload text.
-- Actual Qwen3 8B loaded with **9,999,575,156 tracked GPU buffer bytes**; terminated
-  before Janus loaded; genuine generation completed; Janus terminated before
-  Qwen was reloaded and answered another real CLI request. Tracked allocation is
-  Qwen buffers, not total device memory; browser/driver reclamation is asynchronous.
-- Request capture showed **zero image-worker/runtime/Janus requests before consent**,
-  including an attempted `image --generate` command while disabled.
-- Real guest command `term-llm image --generate "A pelican riding a bike." --seed 1 -o pelican.png`
-  saved **300,208 PNG bytes**, a correct sidecar, and a 384×384 Kitty image with an
-  actual wterm placement. Panel preview/download uses the same PNG.
-- SHA-256: `0ba6ba0d9866e25798a2cd1dbf3e7c98369e09d53af0a4b055c7a988fc68b421`.
-  A second seeded command saved a byte-identical PNG. End-to-end first command
-  was ~16 seconds including typed input, model work, mailbox, serial graphics and
-  validation; this is not the narrower ~7-second warm model-only benchmark.
-- Cancel during actual generation returned nonzero, saved no `canceled.png`, and
-  terminated the worker. Cancel during a new cached load also terminated it.
-  Prior PNG files survived unload/text reload. Shutdown released workers and
-  cleared consent. Controlled absent-WebGPU and null-adapter workers returned
-  helpful errors without requesting runtime or weights.
-- The hashed staging build was also exercised through the same full live test.
-  Lesson progress and the `/` logo link stayed intact; after switching back,
-  installing zsh completions, `exec $SHELL`, and actual Tab completion of
-  `term-llm ch` to `term-llm chat` passed.
-  One staging load returned an opaque ONNX numeric runtime error; it was surfaced,
-  worker terminated, and a fresh explicit retry passed. Numeric runtime failures
-  now include a memory/retry hint; arbitrary hardware success is not guaranteed.
-
-Reproduction commands are in the README. Ignored raw evidence lives under
-`evidence/optional-janus`, `evidence/optional-janus-qwen`, and
-`evidence/optional-janus-staged`. Browser tokens, historical probes, model files
-and sample binaries are deliberately not committed. The existing npm audit
-reports four high findings in the Node-side Transformers/ONNX/sharp dependency
-chain; these Node packages are not shipped in the image browser runtime. Do not
-claim the entire development dependency tree is audit-clean.
+Reproduce via README commands. Ignored evidence: `evidence/native-image-live.log`
+and `evidence/optional-janus-staged/`. No credentials, sample binaries or model
+weights are committed. The unchanged runtime dependency chain retains the previously
+documented Node-side npm audit findings; no audit-clean claim is made.
