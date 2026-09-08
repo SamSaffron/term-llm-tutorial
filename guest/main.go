@@ -132,7 +132,6 @@ func main() {
 	}
 	go watchWeb(dir)
 	go watchGeometry(dir)
-	go watchImageProvider(dir)
 	b := &bridge{dir: dir}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v1/chat/completions", b.complete)

@@ -64,3 +64,8 @@ No hosted image inference API or model weight mirror is provided.
 ## Native image-provider integration
 
 The CLI is built from clean upstream commit `ba07b58441a660e3f279837851a8d32eb948f083`, including term-llm PR1120. `scripts/build-native-cli.sh` fetches that exact Git object, rejects modified/wrong source, builds the upstream frontend and Linux/i386 softfloat binary, and does not apply patches. The old downloadable CLI binary is removed from the bootstrap manifest. Guest demo/Janus HTTP endpoints implement the native OpenAI-compatible Images API; no image-command wrapper is installed.
+
+Janus license/download consent is collected by a launch-only modal before any
+model download. Native image configuration is fixed at boot; browser-managed
+GPU residency does not change the selected text/image providers. The terminal
+and model pins above are unchanged by this UI lifecycle change.

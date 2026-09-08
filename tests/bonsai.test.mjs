@@ -98,11 +98,11 @@ test('built module graphs keep Bonsai dependencies out of the page and Simulator
   if(entry==='simulator-worker')assert.doesNotMatch(inputs,/node_modules/);
  }
 });
-test('three modes preserve Qwen default and Janus callbacks, dedicated staging and dependency boundary',async()=>{
+test('three modes preserve Qwen default and fixed model residency, dedicated staging and dependency boundary',async()=>{
  const html=await readFile('public/index.html','utf8'),app=await readFile('public/app.mjs','utf8');
  assert.deepEqual([...html.matchAll(/<option value="(qwen|bonsai|simulator)"/g)].map(m=>m[1]),['qwen','bonsai','simulator']);
  assert.match(html,/<option value="qwen" selected>/);assert.match(app,/bonsai:'prism-ml\/Bonsai-8B-Q1_0'/);
- assert.match(app,/selectedModel==='bonsai'\?'bonsai-worker.js'/);assert.match(app,/suspendText:.*resetWorker/);assert.match(app,/backend:selectedModel/);
+ assert.match(app,/selectedModel==='bonsai'\?'bonsai-worker.js'/);assert.match(app,/unload:.*resetWorker/);assert.match(app,/backend:selectedModel/);
  assert.doesNotMatch(app,/from ['"](?:bitgpu|@noble|\.\/bonsai)/);
  for(const f of ['scripts/build.mjs','scripts/stage-hosting.mjs','scripts/stage-cdn.mjs'])assert.match(await readFile(f,'utf8'),/bonsai-worker/);
  assert.equal(JSON.parse(await readFile('package.json','utf8')).dependencies.bitgpu,'0.19.1');

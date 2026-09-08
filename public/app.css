@@ -8,6 +8,7 @@
 
 #terminal.wterm{--term-font-size:12px;--term-bg:#060a10;--term-fg:#e5edf6;--term-row-height:14.4px;overflow-y:auto;box-shadow:none;border-radius:0}
 
-#image-panel{grid-column:1/-1;padding:1rem;border:1px solid var(--border,#344052);margin:1rem 0}#image-panel p,#image-panel label{line-height:1.5}#image-panel label{display:block}#image-panel input{width:auto}#image-panel pre{overflow:auto;white-space:pre-wrap}#image-panel img{max-width:100%;height:auto}#image-panel a{color:inherit;text-decoration:underline}.image-actions{display:flex;flex-wrap:wrap;gap:.6rem;margin-top:1rem}
 
 .launch-selects{display:flex;gap:12px;flex-wrap:wrap}.launch-selects>div:first-child{flex:2;min-width:240px}.launch-selects>div:last-child{flex:1;min-width:140px}
+
+#janus-consent{max-width:520px;padding:28px;border:1px solid #39574a;border-radius:16px;background:#0b171c;color:#e5edf6;line-height:1.6}#janus-consent::backdrop{background:#000b}#janus-consent a{color:#8eddb2}.consent-actions{display:flex;justify-content:flex-end;gap:12px;margin-top:24px}

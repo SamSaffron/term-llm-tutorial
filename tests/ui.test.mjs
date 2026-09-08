@@ -64,8 +64,15 @@ test('guest runtime uses stock CLI without obsolete artifact agent or preview wa
 });
 
 test('image commands use native inline Kitty output, never a sidebar image surface',async()=>{
- const html=await readFile('public/index.html','utf8'),app=await readFile('public/app.mjs','utf8'),panel=await readFile('public/image-panel.mjs','utf8');
- assert.doesNotMatch(html+app+panel,/image-start-guide|image-preview|image-result|image-download|images\.preview/);
+ const html=await readFile('public/index.html','utf8'),app=await readFile('public/app.mjs','utf8');
+ assert.doesNotMatch(html+app,/image-start-guide|image-preview|image-result|image-download|images\.preview/);
  assert.match(await readFile('public/boot.sh','utf8'),/TERM=xterm-kitty/);
  assert.match(await readFile('scripts/build.mjs','utf8'),/build-wterm\.sh/);
+});
+
+test('Janus consent is boot-only and workspace has no model switching controls',async()=>{
+ const html=await readFile('public/index.html','utf8'),app=await readFile('public/app.mjs','utf8');
+ assert.match(html,/<dialog id="janus-consent"/);
+ assert.doesNotMatch(html+app,/image-panel|image-enable|image-text|image-cancel|Reload text|setImageProvider/);
+ assert.ok(app.indexOf("await confirmJanus")<app.indexOf("await fetchBootAssets"));
 });

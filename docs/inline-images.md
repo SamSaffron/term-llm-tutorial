@@ -3,7 +3,8 @@
 `term-llm image "prompt"` saves and displays the selected provider's image **in the
 terminal**. The sidebar stays on the current lesson. There is no preview panel,
 image download link, CLI wrapper, special image flag or CLI output translation.
-Existing bottom controls remain for Janus consent, model release and text reload.
+Janus consent is a boot-only modal. Session choices are fixed; residency changes
+happen internally without tutorial controls.
 
 ## Terminal implementation and provenance
 
@@ -56,8 +57,8 @@ not a blanket claim of full Kitty protocol conformance or full native TUI testin
 - Actual v86 guest and stock CLI: launch-selected Demo, two successive images,
   resize and retained scrollback; exact canned PNG saved without Janus downloads.
 - Actual browser GPU Janus: native CLI saves a genuine PNG and paints terminal
-  canvases; no sidebar output. Cancel, unavailable-provider/no-fallback, text
-  reload, files/lesson preservation, completion and shutdown are exercised.
+  canvases; no sidebar output. Boot-only consent and automatic residency
+  preserve fixed providers; there are no reload/unload controls in the tutorial.
 - The first twelve CLI lessons also pass in the real guest with Simulator,
   including approvals, MCP, chat/resume, agents, export, all six inline Demo
   images, PNG piping and mobile tabs. Lesson 13 (native web) was not rerun here.
